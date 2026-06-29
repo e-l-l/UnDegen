@@ -39,6 +39,7 @@ rignore==0.7.6
 sentry-sdk==2.63.0
 shellingham==1.5.4
 six @ file:///AppleInternal/Library/BuildRoots/4~CQH2ugAdEkxx3ZkrZolIWlkoB3pJrxMjVv7CK8s/Library/Caches/com.apple.xbs/TemporaryDirectory.1I3Zwu/Sources/python3/six-1.15.0-py2.py3-none-any.whl
+SQLAlchemy==2.0.51
 starlette==0.49.3
 toml==0.10.2
 tomli==2.4.1
