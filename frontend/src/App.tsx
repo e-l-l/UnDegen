@@ -1,34 +1,37 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import appLogo from '/favicon.svg'
-import PWABadge from './PWABadge.tsx'
-import './App.css'
+import { AuthScreen } from "@/features/auth/AuthScreen"
+import { useSession } from "@/hooks/useSession"
+import { supabase } from "@/utils/supabase"
+import PWABadge from "./PWABadge.tsx"
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { session, loading } = useSession()
 
+  if (loading) {
+    return <div className="min-h-svh bg-background" />
+  }
+
+  if (!session) {
+    return (
+      <>
+        <AuthScreen />
+        <PWABadge />
+      </>
+    )
+  }
+
+  // Placeholder home until the "Today" screen exists — proves the auth loop.
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={appLogo} className="logo" alt="UnDegen logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>UnDegen</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+      <main className="flex min-h-svh flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-[14px] text-ink-muted">Signed in as</p>
+        <p className="text-[18px] font-medium text-ink">{session.user.email}</p>
+        <button
+          onClick={() => void supabase.auth.signOut()}
+          className="mt-2 text-[13px] text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline"
+        >
+          Sign out
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      </main>
       <PWABadge />
     </>
   )

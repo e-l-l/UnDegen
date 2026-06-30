@@ -1,68 +1,106 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ── Undegen design system ───────────────────────────────────────────────────
+   Grayscale + a single pastel-pink accent. Pink is a signal, not decoration:
+   the ONLY pink elements are the primary CTA and the brand mark. Everything
+   else stays grayscale. App is always dark — tokens live on :root, no toggle.
+   Values are the auth handoff tokens. ------------------------------------------ */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --radius: 0.75rem; /* 12px base; sm/md/lg/xl derived in @theme */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* shadcn semantic tokens */
+  --background: #0f0f0f;
+  --foreground: #f0f0f0;
+  --card: #1a1a1a;
+  --card-foreground: #f0f0f0;
+  --popover: #1a1a1a;
+  --popover-foreground: #f0f0f0;
+  --primary: #f2a7bb; /* the pink — CTAs + logo only */
+  --primary-foreground: #1a1012; /* near-black text on pink */
+  --secondary: #1a1a1a;
+  --secondary-foreground: #cfcfcf;
+  --muted: #1a1a1a;
+  --muted-foreground: #666666;
+  --accent: #161616;
+  --accent-foreground: #cfcfcf;
+  --destructive: #c2566e; /* restrained rose — errors stay grey, never loud red */
+  --border: #2a2a2a;
+  --input: #2a2a2a;
+  --ring: #f2a7bb; /* faint pink focus ring, applied at low opacity */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  /* Undegen extras — exposed as Tailwind colors via @theme below */
+  --panel: #0c0c0c; /* recessed brand pane */
+  --surface: #1a1a1a; /* mobile input/surface */
+  --surface-raised: #161616; /* desktop input */
+  --hairline: #222222; /* "or" divider */
+  --edge-panel: #1a1a1a;
+  --edge-chip: #262626;
+  --pink: #f2a7bb;
+  --pink-hover: #e8879f; /* pressed/active pink */
+  --on-pink: #1a1012;
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  /* text ramp (never pure white) */
+  --ink-faint: #5a5a5a;
+  --ink-muted: #666666;
+  --ink-dim: #777777;
+  --ink-body: #9a9a9a;
+  --ink-soft: #cccccc;
+  --ink: #f0f0f0;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+@theme inline {
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Undegen named scale */
+  --color-panel: var(--panel);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-edge-panel: var(--edge-panel);
+  --color-edge-chip: var(--edge-chip);
+  --color-pink: var(--pink);
+  --color-pink-hover: var(--pink-hover);
+  --color-on-pink: var(--on-pink);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-body: var(--ink-body);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink: var(--ink);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
   }
 }
