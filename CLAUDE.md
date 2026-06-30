@@ -23,6 +23,17 @@ Project context for Claude Code. Read this before touching anything.
 
 ---
 
+## Context Files (`CONTEXT.md`)
+
+Substantial nodes in the repo carry a local `CONTEXT.md` documenting that node's contents and the non-obvious behaviours/contracts a session must respect. This file is the root context; node files are the local detail. Current files: `frontend/`, `frontend/src/db/`, `supabase/`.
+
+**Always:**
+- **Read** the relevant `CONTEXT.md` before working in a directory that has one.
+- **Update** the relevant `CONTEXT.md` in the same change whenever a change invalidates what it says — e.g. new/removed files, a changed contract or behaviour, a schema change, new build/dev commands, or something moving from "not built yet" to built. Treat the doc as part of the change, not a follow-up.
+- Keep node files local — don't duplicate this root doc; link back to it instead. Add a new `CONTEXT.md` when a directory grows into a substantial node of its own.
+
+---
+
 ## Tech Stack
 
 ### Frontend (`/frontend`)
@@ -166,3 +177,4 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 - Don't add extension tables for activity config — use nullable columns on `activities`
 - Don't use gamification patterns (streaks as hero metric, confetti, points, levels)
 - Don't auto-update the service worker silently — always prompt
+- Don't land a change that invalidates a `CONTEXT.md` without updating that file in the same change
