@@ -16,8 +16,8 @@ Project context for Claude Code. Read this before touching anything.
 
 ```
 /
-├── frontend/    # React PWA (Vite)
-├── backend/     # FastAPI
+├── frontend/    # React PWA (Vite) — the whole app
+├── supabase/    # DB migrations + Edge Functions (Web Push)
 └── CLAUDE.md
 ```
 
@@ -33,14 +33,14 @@ Project context for Claude Code. Read this before touching anything.
 - **vite-plugin-pwa** — service worker, web manifest, asset generation (`injectManifest` strategy)
 - **@vite-pwa/assets-generator** — generates all icon sizes from a single source SVG
 
-### Backend (`/backend`)
-- **FastAPI** — Python API server
-- **Supabase** — Postgres database + auth. FastAPI connects to Supabase Postgres directly; Supabase Auth handles JWTs
-- Push notifications triggered server-side via this backend (cron-scheduled endpoint calls Web Push API)
+### Backend — Supabase (no custom server)
+- **Supabase** — Postgres + Auth. The client talks to Supabase **directly** via `supabase-js`: Auth for login/JWTs, PostgREST for data. **RLS** enforces per-user ownership (see migration) — no app server sits in the data path.
+- **Web Push** — the only genuine server-side need. A **Supabase Edge Function** (Deno) signs and sends Web Push, triggered on schedule by **`pg_cron`** (+ `pg_net`). Nothing standalone to host.
+- **Dropped FastAPI** — redundant with PostgREST for CRUD, plus an extra deploy target and secret surface. See Key Decisions.
 
 ### Hosting
 - Frontend → **Vercel** (deploys on GitHub push)
-- Backend → TBD
+- Data + Auth + Push → **Supabase** (Postgres, Auth, Edge Functions, `pg_cron`). No separate backend service.
 
 ### Package manager
 - Frontend: **npm** (not pnpm, not yarn)
@@ -54,10 +54,10 @@ User action
     ↓
 Write to Dexie (local, instant)
     ↓
-Queue sync to backend/Supabase
+Queue write (syncQueue)
     ↓
-Online?  → sync immediately
-Offline? → sync when connection returns (background sync via service worker)
+Online?  → flush to Supabase directly via supabase-js (RLS-scoped)
+Offline? → flush when connection returns (background sync via service worker)
 ```
 
 - **All reads come from Dexie.** Never read from the API in the critical path.
@@ -135,6 +135,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Decision | Choice | Reason |
 |---|---|---|
 | PWA vs native | PWA | No App Store, no $99/yr, Web Push solves notifications on iOS 16.4+ |
+| Backend service | None — Supabase-direct | `supabase-js` covers auth + CRUD with RLS; only Web Push needs a server, done via Edge Function + `pg_cron`. Dropped FastAPI (redundant, extra host + secret surface) |
 | Local DB | Dexie.js | Clean async/await API over raw IndexedDB, TypeScript support, schema versioning |
 | Data strategy | Local-first | Offline is a core feature; Supabase is cloud mirror only |
 | Config storage | Nullable columns on `activities` | Avoids multi-table joins for every config read; ~10 nullables is fine for this scale |
@@ -151,7 +152,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 ## Open Questions (unresolved — flag before implementing)
 
 - **Day materialisation logic** — function that runs on app open for a new date: create `days` row, query `activities` matching today's weekday + `recurrence_start <= today`, insert `day_activities` rows. Load-bearing logic, not yet designed in detail.
-- **End-of-day missed detection** — how/when `completions.status` flips to `missed`. Options: cron job on the backend, or computed client-side when next day opens.
+- **End-of-day missed detection** — how/when `completions.status` flips to `missed`. Options: `pg_cron` job in Supabase, or computed client-side when next day opens.
 - **Recurrence exceptions** — no way to skip an activity on a specific date without archiving it. An `exception_dates: date[]` column on `activities` is the likely fix when needed.
 - **push_subscriptions table** — required for Web Push but not yet in the schema. Stores Web Push subscription objects per user for server-side notification triggering.
 
