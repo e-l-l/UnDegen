@@ -26,7 +26,7 @@ function Spinner(props: SVGProps<SVGSVGElement>) {
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null
   return (
-    <p className="mt-[7px] flex items-center gap-1.5 text-[11.5px] text-ink-faint">
+    <p className="mt-1.75 flex items-center gap-1.5 text-[11.5px] text-ink-faint">
       <span className="size-1 rounded-full bg-destructive/70" />
       {msg}
     </p>
@@ -52,13 +52,13 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
   const isSignup = mode === "signup"
 
   return (
-    <div className="flex w-full flex-1 flex-col pt-[54px] lg:w-[340px] lg:flex-none lg:pt-0">
+    <div className="flex w-full flex-1 flex-col pt-13.5 lg:w-85 lg:flex-none lg:pt-0">
       {/* mobile vertical rhythm: push content down ~45% */}
       <div className={cn("lg:hidden", isSignup ? "flex-[0.7]" : "flex-[0.9]")} />
 
       {/* logo mark — mobile only (desktop logo lives in the brand panel) */}
-      <span className="mb-[26px] flex size-[46px] items-center justify-center rounded-[14px] border border-border bg-surface lg:hidden">
-        <LogoCheck className="size-[22px] text-pink" />
+      <span className="mb-6.5 flex size-11.5 items-center justify-center rounded-[14px] border border-border bg-surface lg:hidden">
+        <LogoCheck className="size-5.5 text-pink" />
       </span>
 
       {/* heading + subtitle (copy differs by breakpoint, per handoff) */}
@@ -72,7 +72,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
           "Welcome back"
         )}
       </h1>
-      <p className="mt-[7px] text-[14.5px] text-ink-muted">
+      <p className="mt-1.75 text-[14.5px] text-ink-muted">
         {isSignup ? (
           <>
             <span className="lg:hidden">Start with three reminders. Free.</span>
@@ -91,11 +91,11 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
           e.preventDefault()
           void submit()
         }}
-        className={cn("flex flex-col gap-3 lg:gap-[14px]", isSignup ? "mt-[28px]" : "mt-[30px]")}
+        className={cn("flex flex-col gap-3 lg:gap-3.5", isSignup ? "mt-7" : "mt-7.5")}
       >
         {isSignup && (
           <div>
-            <Label htmlFor="name" className="mb-[7px] block">
+            <Label htmlFor="name" className="mb-1.75 block">
               Name
             </Label>
             <Input
@@ -112,7 +112,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
         )}
 
         <div>
-          <Label htmlFor="email" className="mb-[7px] block">
+          <Label htmlFor="email" className="mb-1.75 block">
             Email
           </Label>
           <Input
@@ -129,7 +129,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
         </div>
 
         <div>
-          <div className="mb-[7px] flex items-baseline justify-between">
+          <div className="mb-1.75 flex items-baseline justify-between">
             <Label htmlFor="password">Password</Label>
             {!isSignup && (
               <button
@@ -147,7 +147,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
               autoComplete={isSignup ? "new-password" : "current-password"}
               className={cn(
                 inputSizing,
-                "pr-[44px]",
+                "pr-11",
                 !passwordVisible && password.length > 0 && "tracking-[0.18em]"
               )}
               value={password}
@@ -158,17 +158,17 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
               type="button"
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               onClick={() => setPasswordVisible(!passwordVisible)}
-              className="absolute right-[15px] top-1/2 -translate-y-1/2 text-[#555555] transition-colors hover:text-ink-body"
+              className="absolute right-3.75 top-1/2 -translate-y-1/2 text-[#555555] transition-colors hover:text-ink-body"
             >
               {passwordVisible ? (
-                <EyeOff className="size-[18px]" />
+                <EyeOff className="size-4.5" />
               ) : (
-                <Eye className="size-[18px]" />
+                <Eye className="size-4.5" />
               )}
             </button>
           </div>
           {isSignup && !errors.password ? (
-            <p className="mt-[7px] text-[11.5px] text-ink-faint">At least 8 characters.</p>
+            <p className="mt-1.75 text-[11.5px] text-ink-faint">At least 8 characters.</p>
           ) : (
             <FieldError msg={errors.password} />
           )}
@@ -179,22 +179,22 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
           size="lg"
           disabled={submitting}
           className={cn(
-            "mt-[24px] w-full lg:h-[50px] lg:rounded-[13px] lg:text-[15.5px]",
-            isSignup && "mt-[22px]"
+            "mt-6 w-full lg:h-12.5 lg:rounded-[13px] lg:text-[15.5px]",
+            isSignup && "mt-5.5"
           )}
         >
           {submitting ? <Spinner /> : isSignup ? "Create account" : "Log in"}
         </Button>
 
         {errors.form && (
-          <p className="mt-[14px] flex items-center justify-center gap-1.5 text-center text-[12px] text-ink-faint">
+          <p className="mt-3.5 flex items-center justify-center gap-1.5 text-center text-[12px] text-ink-faint">
             <span className="size-1 rounded-full bg-destructive/70" />
             {errors.form}
           </p>
         )}
 
         {isSignup && (
-          <p className="mt-4 text-center text-[12px] leading-[1.5] text-ink-faint lg:hidden">
+          <p className="mt-4 text-center text-[12px] leading-normal text-ink-faint lg:hidden">
             By signing up you agree to our
             <br />
             Terms &amp; Privacy Policy.
@@ -205,7 +205,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
       {/* mobile: push footer to bottom */}
       <div className="flex-1 lg:hidden" />
 
-      <p className="pb-[34px] text-center text-[14px] text-ink-muted lg:mt-[26px] lg:pb-0">
+      <p className="pb-8.5 text-center text-[14px] text-ink-muted lg:mt-6.5 lg:pb-0">
         {isSignup ? "Already have an account? " : "New here? "}
         <button
           type="button"
