@@ -103,4 +103,8 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
   }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }

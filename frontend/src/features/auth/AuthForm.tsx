@@ -131,14 +131,14 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
         <div>
           <div className="mb-1.75 flex items-baseline justify-between">
             <Label htmlFor="password">Password</Label>
-            {!isSignup && (
+            {/* {!isSignup && (
               <button
                 type="button"
                 className="text-[12px] text-ink-muted transition-colors hover:text-ink"
               >
                 Forgot?
               </button>
-            )}
+            )} */}
           </div>
           <div className="relative">
             <Input

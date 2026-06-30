@@ -59,7 +59,7 @@ export function BrandPanel({ mode, className }: { mode: AuthMode; className?: st
       ) : (
         <div className="relative flex flex-1 flex-col justify-center">
           <h2 className="max-w-105 text-[30px] font-semibold leading-tight tracking-[-0.02em] text-[#e8e8e8]">
-            Start small. Three reminders, free.
+            For the things you keep avoiding.
           </h2>
           <ul className="mt-7.5 flex flex-col gap-4">
             <FeatureRow icon={<Clock className="size-3.75" />} label="Timed daily reminders" />
