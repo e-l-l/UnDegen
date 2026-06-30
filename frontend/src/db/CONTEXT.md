@@ -11,11 +11,12 @@ frontend/src/
 
 - `db.ts` — the Dexie database instance (`UndegenDB`), schema version, and index definitions.
 - `types.ts` — TypeScript interfaces for the six domain tables + the local-only `syncQueue`, plus the Postgres enum types as string unions.
+- `repo.ts` — the **write API**. `createRow`/`updateRow`/`deleteRow` (generic) + `newActivity`/`newDay` (stamp `id`/`user_id`/timestamps). Every write applies to Dexie *and* enqueues a `SyncQueueItem` in **one transaction**, then nudges the sync engine. The queue is drained by `src/sync/syncEngine.ts` (`flushQueue`, `startSync`).
 
 ## The core contract (do not break)
 
 1. **All reads come from Dexie. Never from Supabase in the UI critical path.** Supabase is the cloud mirror, not the read source.
-2. **Write path:** write to Dexie (instant) → enqueue a `SyncQueueItem` → flush to Supabase when online. The flush logic is **not written yet** — `syncQueue` exists but nothing drains it.
+2. **Write path:** go through `repo.ts` — it writes Dexie (instant) → enqueues a `SyncQueueItem` (same transaction) → `src/sync/syncEngine.ts` flushes to Supabase when online (`upsert` for insert/update, `delete` for delete). Drain is single-flight, in `++id` order (FK-safe: parents before children), and stops at the first failure to retry later. Triggers: startup, `online` event, and after each mutation. **Known v0 gap:** a permanently-failing ("poison") item blocks the queue — failures are assumed transient; no SW background-sync trigger yet.
 3. **No stored derived values** (streaks, completion rates). Compute on read.
 
 ## Things that are non-obvious and load-bearing
@@ -30,8 +31,8 @@ frontend/src/
 
 ## Not built yet (expect to add here / nearby)
 
-- Sync flush: drain `syncQueue` → `supabase-js` upsert/delete, with retry using `attempts`/`lastError`, and background-sync trigger from `src/sw.ts`.
-- Day materialisation on app open (create today's `days` row + matching `day_activities`) — see Open Questions in CLAUDE.md; not yet designed.
+- Sync flush is **built** (`src/sync/syncEngine.ts`). Still to add: SW background-sync trigger from `src/sw.ts`, and poison-item handling (currently a permanently-failing item blocks the queue).
+- Day materialisation on app open (create today's `days` row + matching `day_activities`) — see Open Questions in CLAUDE.md; not yet designed. It will use `repo.ts` (`newDay` + `createRow("day_activities", …)`).
 - Schema migrations: bump `db.version(n)` and add an `.upgrade()` when the shape changes; never edit `version(1)` in place once data exists in the wild.
 
 ## Mirror discipline

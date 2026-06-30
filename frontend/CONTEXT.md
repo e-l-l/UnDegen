@@ -6,7 +6,8 @@ Local context for this node. Root context (product, tone, settled decisions) liv
 / (CLAUDE.md)
 └── frontend/   ← YOU ARE HERE — the whole app, a React PWA (Vite)
     └── src/
-        ├── db/            → see frontend/src/db/CONTEXT.md  (local-first data layer)
+        ├── db/            → see frontend/src/db/CONTEXT.md  (data layer + write API: repo.ts)
+        ├── sync/          → syncEngine.ts — drains syncQueue → Supabase (covered below)
         ├── utils/         → supabase client (covered below)
         ├── lib/           → cn() util (shadcn)
         ├── components/ui/ → shadcn primitives (button, input, label)
@@ -69,7 +70,7 @@ Email+password (Supabase Auth). Recreates the `design_handoff_auth` spec, rebran
 
 Six lines: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)`. Needs those two env vars (`.env`, gitignored).
 
-**Behaviour to respect:** this client is the *only* path to the cloud, and per the architecture it must **never be read from in the UI critical path** — UI reads come from Dexie. This file (or a sibling) is where the sync-flush logic will live; it is not written yet.
+**Behaviour to respect:** this client is the *only* path to the cloud, and per the architecture it must **never be read from in the UI critical path** — UI reads come from Dexie. The cloud is written to only by the sync engine (`src/sync/syncEngine.ts`) draining the queue; feature code mutates via `src/db/repo.ts`, never by calling `supabase` directly.
 
 ## PWA — `vite.config.ts` + `src/sw.ts`
 
