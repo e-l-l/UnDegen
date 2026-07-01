@@ -2,11 +2,14 @@ import type { Table } from "dexie"
 
 import { requestFlush } from "@/sync/syncEngine"
 import { db } from "./db"
+import { recursOn } from "./recurrence"
 import type {
   Activity,
   Completion,
+  CompletionStatus,
   Day,
   DayActivity,
+  DayActivitySource,
   SyncOp,
   TableName,
   WorkSession,
@@ -103,4 +106,59 @@ export async function newDay(
   const row: Day = { id: newId(), user_id: userId, date, note, created_at: nowIso() }
   await createRow("days", row)
   return row
+}
+
+// ── Lazy instantiation (calendar model — see ADR 0001) ───────────────────────
+// day / day_activity rows are born only when an instance gains state. All are
+// idempotent get-or-create, keyed on the schema's unique indexes.
+
+export async function ensureDay(userId: string, date: string): Promise<Day> {
+  const existing = await db.days.where("[user_id+date]").equals([userId, date]).first()
+  return existing ?? (await newDay(userId, date))
+}
+
+export async function ensureDayActivity(
+  userId: string,
+  date: string,
+  activityId: string
+): Promise<DayActivity> {
+  const day = await ensureDay(userId, date)
+  const existing = await db.day_activities
+    .where("[day_id+activity_id]")
+    .equals([day.id, activityId])
+    .first()
+  if (existing) return existing
+  // source falls out of the rule: recurring if it occurs on this date, else a manual add.
+  const activity = await db.activities.get(activityId)
+  const source: DayActivitySource = activity && recursOn(activity, date) ? "recurring" : "manual"
+  const row: DayActivity = { id: newId(), day_id: day.id, activity_id: activityId, source, position: 0 }
+  await createRow("day_activities", row)
+  return row
+}
+
+// Mark a reminder done/skipped for a date. One completion per day_activity, so
+// this upserts. ("missed" is derived, never written here — see ADR 0001.)
+export async function markReminder(
+  userId: string,
+  date: string,
+  activityId: string,
+  status: Extract<CompletionStatus, "done" | "skipped">,
+  note: string | null = null
+): Promise<Completion> {
+  const da = await ensureDayActivity(userId, date, activityId)
+  const existing = await db.completions.where("day_activity_id").equals(da.id).first()
+  const row: Completion = {
+    id: existing?.id ?? newId(),
+    day_activity_id: da.id,
+    status,
+    completed_at: status === "done" ? nowIso() : null,
+    note,
+  }
+  await (existing ? updateRow : createRow)("completions", row)
+  return row
+}
+
+// Add an existing activity to a date it doesn't recur on (source becomes 'manual').
+export function addManual(userId: string, date: string, activityId: string): Promise<DayActivity> {
+  return ensureDayActivity(userId, date, activityId)
 }

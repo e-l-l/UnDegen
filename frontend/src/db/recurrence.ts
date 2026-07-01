@@ -1,0 +1,24 @@
+import type { Activity } from "./types"
+
+// Pure recurrence helpers, shared by the derived day-view and the write path.
+// Dates are local 'YYYY-MM-DD' strings; weekday is JS getDay() (0=Sun..6=Sat),
+// matching what activities.recurrence_days stores.
+
+export function todayLocal(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+export function weekdayOf(date: string): number {
+  const [y, m, d] = date.split("-").map(Number)
+  return new Date(y, m - 1, d).getDay()
+}
+
+// Does this activity's rule produce an occurrence on `date`?
+export function recursOn(activity: Activity, date: string): boolean {
+  return (
+    !activity.archived &&
+    activity.recurrence_start <= date &&
+    activity.recurrence_days.includes(weekdayOf(date))
+  )
+}

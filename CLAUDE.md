@@ -113,12 +113,12 @@ Reminder-specific (null if long_task): `reminder_type` (`strict`|`soft`), `stric
 Long-task-specific (null if reminder): `default_mode` (`goal`|`zen`), `goal_duration_mins`, `goal_unit`, `goal_value`
 
 ### `days`
-One row per calendar date per user. Container for the daily view.
+One row per calendar date per user. **Sparse / engagement-based** — created lazily when a date first acquires state (a `note`, or the first `day_activity` instantiated on it), *not* for every calendar day. Container for the daily view.
 
 Key columns: `id`, `user_id`, `date` (unique per user), `note`
 
 ### `day_activities`
-Materialised instance of an activity on a specific day. Created automatically on app open for a new date (recurring) or added manually.
+**Override row, calendar-style** — *not* pre-created for every occurrence. A recurring activity's occurrences are **derived on read** by expanding `recurrence_days`/`recurrence_start` over the viewed date(s). A `day_activities` row is **lazily instantiated only when an instance acquires state** — a completion, a work session, or a manual add. Think of it as a calendar's per-instance override, not the schedule itself.
 
 Key columns: `id`, `day_id`, `activity_id`, `source` (`recurring`|`manual`), `position`
 
@@ -151,6 +151,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Data strategy | Local-first | Offline is a core feature; Supabase is cloud mirror only |
 | Config storage | Nullable columns on `activities` | Avoids multi-table joins for every config read; ~10 nullables is fine for this scale |
 | `day_activities.type` | Removed | Inferrable from join; storing it creates drift risk |
+| Recurrence model | Calendar-style (derive, don't pre-store) | Occurrences expanded on read from `activities` recurrence; `day_activities` are override rows instantiated lazily when an instance gains state; `days` are sparse/engagement-based. Alarms fire server-side from `activities`, independent of materialisation |
 | Ad-hoc tasks (v0) | Not supported | All `day_activities` have an `activity_id`; everything comes from a template |
 | Pause/resume (v0) | Not supported | Adds timer + sync + analytics complexity; `total_secs` is a simple diff for now |
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
@@ -162,9 +163,8 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 
 ## Open Questions (unresolved — flag before implementing)
 
-- **Day materialisation logic** — function that runs on app open for a new date: create `days` row, query `activities` matching today's weekday + `recurrence_start <= today`, insert `day_activities` rows. Load-bearing logic, not yet designed in detail.
-- **End-of-day missed detection** — how/when `completions.status` flips to `missed`. Options: `pg_cron` job in Supabase, or computed client-side when next day opens.
-- **Recurrence exceptions** — no way to skip an activity on a specific date without archiving it. An `exception_dates: date[]` column on `activities` is the likely fix when needed.
+- ✅ *Resolved* — **Day materialisation** & **missed detection**: settled by the calendar model (ADR 0001 / Key Decisions → Recurrence model) and built in `frontend/src/db/` (`recurrence.ts`, `dayView.ts`, `repo.ts`). The view derives occurrences; rows are lazily instantiated on state; **`missed` is derived on read, never written** (no cron flip, no stored status).
+- **Recurrence exceptions** — a "skip" (`completion.status='skipped'`) marks an occurrence skipped but still *shows* it. Fully *removing* an occurrence from a date (hide it, don't archive the whole activity) is still unsolved; an `exception_dates: date[]` column on `activities` is the likely fix when needed.
 - **push_subscriptions table** — required for Web Push but not yet in the schema. Stores Web Push subscription objects per user for server-side notification triggering.
 
 ---

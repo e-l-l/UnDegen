@@ -32,7 +32,9 @@ frontend/src/
 ## Not built yet (expect to add here / nearby)
 
 - Sync flush is **built** (`src/sync/syncEngine.ts`). Still to add: SW background-sync trigger from `src/sw.ts`, and poison-item handling (currently a permanently-failing item blocks the queue).
-- Day materialisation on app open (create today's `days` row + matching `day_activities`) — see Open Questions in CLAUDE.md; not yet designed. It will use `repo.ts` (`newDay` + `createRow("day_activities", …)`).
+- **Day view = derived, not materialised** (calendar model; CLAUDE.md → Recurrence model). Any date's view is *computed* by **expanding** non-archived `activities` where `recurrence_start ≤ date` and `recurrence_days` includes `date`'s weekday (`getDay()`), then left-joining the existing `day_activities`/`completions`/`work_sessions` for that date to get per-item state. Order by `activities.position`. Not built yet.
+- **Lazy instantiation**: a `day_activities` row (+ its parent `days` row) is created **only** when an instance gains state — completing a reminder (`completion` done/skipped), starting a work session, or manually adding an activity to a date it doesn't recur on (`source:'manual'`). "Skip" = `completion.status='skipped'`. **"Missed" is derived, never written by the client** (due-by-rule on a past date with no completion-bearing row). To build via `repo.ts`: `ensureDay` + `ensureDayActivity` (idempotent via `&[day_id+activity_id]`) then the `completion`/`work_session`.
+- **Rule edits rewrite *uncompleted* derived history** (v0-accepted): editing an activity's recurrence re-derives past dates with no instantiated rows; dates that have completions are concrete and unaffected. `recurrence_start` bounds how far back derivation reaches.
 - Schema migrations: bump `db.version(n)` and add an `.upgrade()` when the shape changes; never edit `version(1)` in place once data exists in the wild.
 
 ## Mirror discipline
