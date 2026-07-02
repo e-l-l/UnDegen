@@ -39,6 +39,7 @@ Substantial nodes in the repo carry a local `CONTEXT.md` documenting that node's
 ### Frontend (`/frontend`)
 - **React + TypeScript + Vite**
 - **Tailwind CSS** — utility-first styling
+- **shadcn/ui** — component layer; use shadcn components for UI, don't hand-roll primitives
 - **Recharts** — charts and analytics graphs
 - **Dexie.js** — IndexedDB wrapper; local-first data layer, source of truth for all reads
 - **vite-plugin-pwa** — service worker, web manifest, asset generation (`injectManifest` strategy)
@@ -79,13 +80,7 @@ Offline? → flush when connection returns (background sync via service worker)
 
 ## PWA Configuration
 
-| Setting | Value | Reason |
-|---|---|---|
-| SW strategy | `injectManifest` | Need custom push event listeners and background sync — `generateSw` can't handle this |
-| Update UX | Prompt for update | App is write-heavy (active timers, offline data); silent auto-reload would kill sessions |
-| Periodic SW update | Enabled, 1h interval | Users keep the app open all day; navigation-only update checks aren't enough |
-| Offline ready prompt | Enabled, auto-dismiss | Offline is a core feature — users need to know it's ready |
-| Icon generation | `minimal-2023` preset | One source SVG → all iOS/Android/favicon sizes |
+Implementation detail lives with the code — see `frontend/CONTEXT.md` (PWA section) for SW strategy, update cadence, offline prompt, and icon generation. Root-level constraint only: **never silently auto-update the SW** (write-heavy app; prompt instead).
 
 ---
 
@@ -156,6 +151,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Pause/resume (v0) | Not supported | Adds timer + sync + analytics complexity; `total_secs` is a simple diff for now |
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
 | Streak calculation | Derived on read | Computed from `completions`; not stored |
+| Missed detection | Derived on read, never written | No cron flip, no stored `missed` status; view computes it (`frontend/src/db/`: `recurrence.ts`, `dayView.ts`, `repo.ts`). ADR 0001 |
 | Activity icons | Frontend string map | No icon/emoji column in DB; icon derived from `type` + `name` on the FE |
 | Package manager | npm | Solo project; familiarity over marginal speed gains |
 
@@ -163,7 +159,6 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 
 ## Open Questions (unresolved — flag before implementing)
 
-- ✅ *Resolved* — **Day materialisation** & **missed detection**: settled by the calendar model (ADR 0001 / Key Decisions → Recurrence model) and built in `frontend/src/db/` (`recurrence.ts`, `dayView.ts`, `repo.ts`). The view derives occurrences; rows are lazily instantiated on state; **`missed` is derived on read, never written** (no cron flip, no stored status).
 - **Recurrence exceptions** — a "skip" (`completion.status='skipped'`) marks an occurrence skipped but still *shows* it. Fully *removing* an occurrence from a date (hide it, don't archive the whole activity) is still unsolved; an `exception_dates: date[]` column on `activities` is the likely fix when needed.
 - **push_subscriptions table** — required for Web Push but not yet in the schema. Stores Web Push subscription objects per user for server-side notification triggering.
 

@@ -61,7 +61,7 @@ export function AuthForm({ auth }: { auth: AuthFormState }) {
         <LogoCheck className="size-5.5 text-pink" />
       </span>
 
-      {/* heading + subtitle (copy differs by breakpoint, per handoff) */}
+      {/* heading + subtitle (copy differs by breakpoint) */}
       <h1 className="text-[28px] font-semibold tracking-[-0.02em] text-ink lg:text-[26px]">
         {isSignup ? (
           <>

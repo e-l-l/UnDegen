@@ -23,7 +23,7 @@ type WeekdayPickerProps = {
 }
 
 // "Custom" has no chip of its own — it's just the fallthrough look when the
-// current selection doesn't set-equal any preset (confirmed by the handoff).
+// current selection doesn't set-equal any preset.
 export function WeekdayPicker({ value, onChange, error }: WeekdayPickerProps) {
   return (
     <div>

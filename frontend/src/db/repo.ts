@@ -183,3 +183,47 @@ export async function markReminder(
 export function addManual(userId: string, date: string, activityId: string): Promise<DayActivity> {
   return ensureDayActivity(userId, date, activityId)
 }
+
+// Start a work session for a long_task day_activity. Goal fields are snapshotted
+// from the activity at start time (goal snapshot rule — see CLAUDE.md), so later
+// edits to the activity don't mutate history. Caller must not call this while an
+// in_progress session already exists for today (would create a concurrent dupe).
+export async function startWorkSession(
+  userId: string,
+  date: string,
+  activityId: string
+): Promise<WorkSession> {
+  const da = await ensureDayActivity(userId, date, activityId)
+  const activity = await db.activities.get(activityId)
+  const row: WorkSession = {
+    id: newId(),
+    day_activity_id: da.id,
+    mode: activity?.default_mode ?? "zen",
+    goal_duration_mins: activity?.goal_duration_mins ?? null,
+    started_at: nowIso(),
+    status: "in_progress",
+  }
+  await createRow("work_sessions", row)
+  return row
+}
+
+// End an in_progress work session. total_secs is a plain wall-clock diff (no
+// pause/resume in v0 — see CLAUDE.md); goal_met only applies in goal mode
+// (zen sessions are open-ended, so there's nothing to meet).
+export async function completeWorkSession(session: WorkSession): Promise<WorkSession> {
+  const endedAt = nowIso()
+  const totalSecs = Math.round((new Date(endedAt).getTime() - new Date(session.started_at).getTime()) / 1000)
+  const goalMet =
+    session.mode === "goal" && session.goal_duration_mins != null
+      ? totalSecs >= session.goal_duration_mins * 60
+      : null
+  const row: WorkSession = {
+    ...session,
+    ended_at: endedAt,
+    total_secs: totalSecs,
+    status: "completed",
+    goal_met: goalMet,
+  }
+  await updateRow("work_sessions", row)
+  return row
+}

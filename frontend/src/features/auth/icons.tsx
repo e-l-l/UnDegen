@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-// Line icons recreated from the design handoff. Stroke uses currentColor so the
+// Hand-rolled line icons for the auth flow. Stroke uses currentColor so the
 // caller controls color (the logo check is the one pink icon; rest grayscale).
 
 export function LogoCheck(props: SVGProps<SVGSVGElement>) {

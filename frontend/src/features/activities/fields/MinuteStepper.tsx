@@ -1,9 +1,9 @@
 import { Minus, Plus } from "../icons"
 
 // Shared by GoalDurationChips + SoftIntervalChips — the manual minutes row
-// revealed when "Custom" is selected. No desktop-specific pixel spec exists
-// for this sub-state (the handoff's desktop frame only shows the Reminder
-// fork), so it keeps the mobile token treatment at every breakpoint.
+// revealed when "Custom" is selected. No desktop-specific styling was
+// designed for this sub-state, so it keeps the same token treatment at every
+// breakpoint.
 type MinuteStepperProps = {
   value: number
   onChange: (value: number) => void

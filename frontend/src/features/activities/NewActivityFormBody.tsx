@@ -13,9 +13,8 @@ import type { NewActivityForm } from "./useNewActivityForm"
 
 // The shared scrollable body — every field, for both breakpoints. Only the
 // Repeat-on/Starts pairing changes shape (stacked -> row) via lg: classes on
-// one wrapper; everything else is a single flow, matching the mobile order
-// (the handoff's desktop body follows the same top-to-bottom order, just in
-// a narrower card).
+// one wrapper; everything else is a single flow, same top-to-bottom order at
+// both breakpoints (desktop is just a narrower card).
 export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
   const isReminder = form.type === "reminder"
 

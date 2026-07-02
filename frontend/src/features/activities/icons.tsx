@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-// Line icons recreated from the create-activity handoff. Stroke uses
+// Hand-rolled line icons for the create-activity flow. Stroke uses
 // currentColor so the caller controls color — every icon here stays
 // grayscale (no icon in this flow is ever pink).
 

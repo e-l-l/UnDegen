@@ -2,8 +2,8 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-// Base input: mobile surface (#1A1A1A). Desktop bg/height tweaks are applied at
-// the call site (lg:bg-surface-raised, heights) per the handoff.
+// Base input: mobile surface (#1A1A1A). Desktop bg/height tweaks are applied
+// at the call site (lg:bg-surface-raised, heights).
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input
