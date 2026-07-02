@@ -9,9 +9,13 @@ export function todayLocal(d: Date = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-export function weekdayOf(date: string): number {
+export function parseLocalDate(date: string): Date {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(y, m - 1, d).getDay()
+  return new Date(y, m - 1, d)
+}
+
+export function weekdayOf(date: string): number {
+  return parseLocalDate(date).getDay()
 }
 
 // Does this activity's rule produce an occurrence on `date`?

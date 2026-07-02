@@ -32,8 +32,6 @@ export interface Activity {
   // long_task-specific (null when type === 'reminder')
   default_mode?: TaskMode | null
   goal_duration_mins?: number | null
-  goal_unit?: string | null
-  goal_value?: number | null
 
   created_at: string
   updated_at: string

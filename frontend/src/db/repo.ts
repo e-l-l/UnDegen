@@ -98,6 +98,23 @@ export async function newActivity(
   return row
 }
 
+// Next position for a new activity — append to the end of the user's list.
+// activities.position is already indexed (db.ts: "id, user_id, archived, position").
+export async function nextActivityPosition(userId: string): Promise<number> {
+  const activities = await db.activities.where("user_id").equals(userId).toArray()
+  return activities.length === 0 ? 0 : Math.max(...activities.map((a) => a.position)) + 1
+}
+
+// Convenience wrapper for the create-activity flow: stamps position (append to
+// end) and archived (false), then delegates to newActivity.
+export async function createActivity(
+  userId: string,
+  input: Omit<Activity, "id" | "user_id" | "created_at" | "updated_at" | "position" | "archived">
+): Promise<Activity> {
+  const position = await nextActivityPosition(userId)
+  return newActivity(userId, { ...input, position, archived: false })
+}
+
 export async function newDay(
   userId: string,
   date: string,

@@ -34,6 +34,8 @@
   --panel: #0c0c0c; /* recessed brand pane */
   --surface: #1a1a1a; /* mobile input/surface */
   --surface-raised: #161616; /* desktop input */
+  --elevated: #2a2a2a; /* selected/elevated fill (mobile) — grayscale selection signal */
+  --elevated-lg: #303030; /* selected/elevated fill (desktop) */
   --hairline: #222222; /* "or" divider */
   --edge-panel: #1a1a1a;
   --edge-chip: #262626;
@@ -81,6 +83,8 @@
   --color-panel: var(--panel);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-elevated: var(--elevated);
+  --color-elevated-lg: var(--elevated-lg);
   --color-hairline: var(--hairline);
   --color-edge-panel: var(--edge-panel);
   --color-edge-chip: var(--edge-chip);

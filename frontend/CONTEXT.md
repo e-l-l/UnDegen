@@ -10,8 +10,9 @@ Local context for this node. Root context (product, tone, settled decisions) liv
         ├── sync/          → syncEngine.ts — drains syncQueue → Supabase (covered below)
         ├── utils/         → supabase client (covered below)
         ├── lib/           → cn() util (shadcn)
-        ├── components/ui/ → shadcn primitives (button, input, label)
+        ├── components/ui/ → shadcn primitives (button, input, label, dialog, toggle-group, popover, calendar)
         ├── features/auth/ → auth screens (covered below)
+        ├── features/activities/ → create-activity flow (covered below)
         └── hooks/         → useSession (covered below)
 /supabase/        → see supabase/CONTEXT.md  (schema, RLS, push)
 ```
@@ -38,8 +39,8 @@ What **is** real and load-bearing:
 - `src/db/` — the Dexie local-first data layer. See its CONTEXT.md.
 - `src/utils/supabase.ts` — the Supabase client.
 - `src/index.css` — the **design system** (see below), imported by `main.tsx`. (A root-level `index.css` used to hold `@import "tailwindcss"` but nothing imported it — deleted. The live stylesheet is `src/index.css`.)
-- `src/App.tsx` — the **auth gate**: `useSession()` → blank while loading, `<AuthScreen/>` when signed out, a placeholder "Today" (email + sign-out) when signed in. The placeholder is temporary until the real Today screen exists.
-- `src/components/ui/`, `src/features/auth/`, `src/hooks/` — see below.
+- `src/App.tsx` — the **auth gate**: `useSession()` → blank while loading, `<AuthScreen/>` when signed out, a placeholder "Today" (email + sign-out) when signed in. The placeholder is temporary until the real Today screen exists. It also mounts a temporary **"+ New activity"** trigger that opens `<NewActivityDialog/>` — remove both when the real Today screen lands.
+- `src/components/ui/`, `src/features/auth/`, `src/features/activities/`, `src/hooks/` — see below.
 - `src/sw.ts` — service worker (see PWA note below).
 - `vite.config.ts`, `pwa-assets.config.ts` — PWA wiring.
 
@@ -57,6 +58,8 @@ Tailwind v4 `@theme`. **Grayscale + a single pastel-pink accent**, app is always
 
 shadcn "new-york", set up manually (deterministic; `components.json` keeps `npx shadcn add <x>` working). `button.tsx` (cva; `default` = the pink CTA + glow, `outline` = grayscale secondary), `input.tsx` (base = mobile sizing; desktop tweaks applied at call site), `label.tsx`. `cn()` lives in `src/lib/utils.ts`.
 
+Also `dialog.tsx` (wraps `@radix-ui/react-dialog`; deliberately unopinionated on sizing/position — that's a call-site concern, since the create-activity flow uses the same Dialog for a full-screen mobile sheet and a centered desktop card, which differ too much to bake into the primitive), `toggle-group.tsx` (wraps `@radix-ui/react-toggle-group`; bakes in the **grayscale-only selected state** — `bg-elevated`/`lg:bg-elevated-lg`, never pink — since every segmented control/weekday-cell/chip in the app is one of these), `popover.tsx` (wraps `@radix-ui/react-popover`), `calendar.tsx` (wraps `react-day-picker`'s `DayPicker`, same grayscale-selection rule). The `--elevated`/`--elevated-lg` tokens (`#2a2a2a`/`#303030`) live in `src/index.css` — the named "selected/elevated fill" signal, distinct from `--surface`/`--surface-raised` (which are input backgrounds, not selection states).
+
 ## Auth — `src/features/auth/` + `src/hooks/useSession.ts`
 
 Email+password (Supabase Auth). Recreates the `design_handoff_auth` spec, rebranded to Undegen; social buttons + "or" divider omitted (we chose email+password only); "Forgot?" link present but not wired.
@@ -65,6 +68,18 @@ Email+password (Supabase Auth). Recreates the `design_handoff_auth` spec, rebran
 - `useAuthForm.ts` — all auth logic/state (no JSX); both layouts consume it. `AuthScreen.tsx` owns it so state survives a resize across `lg`. `AuthForm.tsx` = the form column (breakpoint-specific copy via show/hide spans). `BrandPanel.tsx` = desktop-only left pane. `icons.tsx` = inline line icons.
 - `useSession.ts` gates the app. **Don't `await` other supabase calls inside its `onAuthStateChange` callback** (documented deadlock).
 - **Dashboard prereq:** Auth → URL Configuration Site URL `http://localhost:5173` (+ redirect `/**`); "Confirm email" **off** in dev so signup returns a session immediately.
+
+## Create activity — `src/features/activities/`
+
+The "New activity" creation flow (reminder / long_task fork), recreating the `design_handoff_create_activity` spec. Same shape as the auth feature: `useNewActivityForm.ts` owns all state/validation/submit (no JSX); `NewActivityDialog.tsx` owns the responsive shell.
+
+- **One Radix Dialog, not two implementations.** `NewActivityDialog.tsx` renders a single `<Dialog>`/`<DialogContent>` tree; `lg:` classes switch the content from a full-screen mobile takeover to a centered 620px desktop card with a dimmed backdrop. Header and footer are small duplicated blocks (`lg:hidden` / `hidden lg:flex`) since their structure genuinely differs (mobile: back-chevron · title · ✕, single full-width CTA; desktop: title · ✕, right-aligned Cancel + CTA) — same precedent as `AuthForm`'s breakpoint-conditional copy.
+- **`NewActivityFormBody.tsx`** is the one shared scrollable body for both breakpoints — only the "Repeat on"/"Starts" pairing changes shape (stacked → row) via `lg:` classes on a single wrapper, not a duplicated block.
+- **`fields/`** — one component per form field (`TypeToggle`, `WeekdayPicker`, `StartsDateField`, `ReminderTypeToggle`, `StrictTimeField`, `SoftWindowFields`, `SoftIntervalChips`, `DefaultModeToggle`, `GoalDurationChips`, `MinuteStepper`, plus `shared.tsx` for the tiny `SectionLabel`/`FieldError` helpers). `MinuteStepper` is shared by both `GoalDurationChips` (goal_duration_mins) and `SoftIntervalChips` (soft_interval_mins) — same custom-stepper pattern, decided to apply to both.
+- **`TimePicker.tsx`** — a custom themed Popover + 15-min-increment list (no time-picker library exists; native inputs were explicitly rejected in favour of a themed control). Reused for `strict_time`, `soft_start`, `soft_end`. **`StartsDateField`** uses the `calendar.tsx` primitive for `recurrence_start`, reusing `todayLocal()` from `src/db/recurrence.ts` both as the default and to format a selected `Date` back to the `'YYYY-MM-DD'` string the schema stores.
+- **`icons.tsx`** — hand-rolled inline SVGs (bell, concentric circles, chevron-left, x, calendar, clock, plus/minus), matching `features/auth/icons.tsx`'s convention rather than `lucide-react` (installed per `components.json` but unused anywhere in `src/`).
+- Writes go through `src/db/repo.ts`'s `createActivity` (stamps `position`/`archived`, delegates to `newActivity`) — never straight to Dexie/Supabase from this feature.
+- Temporarily mounted from `App.tsx`'s placeholder screen (see below) — no real Today/Long-tasks screen or router exists yet.
 
 ## `src/utils/supabase.ts` — the cloud edge
 

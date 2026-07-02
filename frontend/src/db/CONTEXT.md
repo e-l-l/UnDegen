@@ -11,7 +11,7 @@ frontend/src/
 
 - `db.ts` — the Dexie database instance (`UndegenDB`), schema version, and index definitions.
 - `types.ts` — TypeScript interfaces for the six domain tables + the local-only `syncQueue`, plus the Postgres enum types as string unions.
-- `repo.ts` — the **write API**. `createRow`/`updateRow`/`deleteRow` (generic) + `newActivity`/`newDay` (stamp `id`/`user_id`/timestamps). Every write applies to Dexie *and* enqueues a `SyncQueueItem` in **one transaction**, then nudges the sync engine. The queue is drained by `src/sync/syncEngine.ts` (`flushQueue`, `startSync`).
+- `repo.ts` — the **write API**. `createRow`/`updateRow`/`deleteRow` (generic) + `newActivity`/`newDay` (stamp `id`/`user_id`/timestamps) + `nextActivityPosition`/`createActivity` (append-to-end helper for the create-activity flow). Every write applies to Dexie *and* enqueues a `SyncQueueItem` in **one transaction**, then nudges the sync engine. The queue is drained by `src/sync/syncEngine.ts` (`flushQueue`, `startSync`).
 
 ## The core contract (do not break)
 
@@ -39,4 +39,4 @@ frontend/src/
 
 ## Mirror discipline
 
-`types.ts` and `db.ts` mirror `supabase/migrations/0001_initial_schema.sql`. A change to the SQL schema **must** be reflected here (and vice versa), or local and cloud drift.
+`types.ts` and `db.ts` mirror `supabase/migrations/0001_initial_schema.sql` (+ `0002_...`). A change to the SQL schema **must** be reflected here (and vice versa), or local and cloud drift. `Activity` no longer carries `goal_unit`/`goal_value` (dropped in `0002` — dead columns from a cut goal axis; `goal_duration_mins` is untouched). `WorkSession` still carries `goal_unit`/`goal_target`/`goal_actual` — deliberately not mirrored/touched, that table isn't built out yet.
