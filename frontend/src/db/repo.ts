@@ -106,13 +106,17 @@ export async function nextActivityPosition(userId: string): Promise<number> {
 }
 
 // Convenience wrapper for the create-activity flow: stamps position (append to
-// end) and archived (false), then delegates to newActivity.
+// end) and archived (false), then delegates to newActivity. Read-then-write
+// wrapped in one transaction so concurrent creates (multi-tab, offline-queue
+// racing an online write) can't read the same max position twice.
 export async function createActivity(
   userId: string,
   input: Omit<Activity, "id" | "user_id" | "created_at" | "updated_at" | "position" | "archived">
 ): Promise<Activity> {
-  const position = await nextActivityPosition(userId)
-  return newActivity(userId, { ...input, position, archived: false })
+  return db.transaction("rw", db.activities, db.syncQueue, async () => {
+    const position = await nextActivityPosition(userId)
+    return newActivity(userId, { ...input, position, archived: false })
+  })
 }
 
 export async function newDay(

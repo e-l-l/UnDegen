@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { Button } from "@/components/ui/button"
 import { NewActivityDialog } from "@/features/activities/NewActivityDialog"
 import { AuthScreen } from "@/features/auth/AuthScreen"
 import { useSession } from "@/hooks/useSession"
@@ -31,12 +32,9 @@ function App() {
       <main className="flex min-h-svh flex-col items-center justify-center gap-3 bg-background px-6 text-center">
         <p className="text-[14px] text-ink-muted">Signed in as</p>
         <p className="text-[18px] font-medium text-ink">{session.user.email}</p>
-        <button
-          onClick={() => setCreatingActivity(true)}
-          className="mt-4 rounded-full bg-pink px-4 py-2 text-[13px] font-medium text-on-pink transition-colors hover:bg-pink-hover"
-        >
+        <Button onClick={() => setCreatingActivity(true)} className="mt-4 rounded-full px-4 text-[13px]">
           + New activity
-        </button>
+        </Button>
         <button
           onClick={() => void supabase.auth.signOut()}
           className="mt-2 text-[13px] text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline"

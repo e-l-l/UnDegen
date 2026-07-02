@@ -45,24 +45,29 @@ export function WeekdayPicker({ value, onChange, error }: WeekdayPickerProps) {
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <div className="mt-2.75 flex gap-2">
+      <ToggleGroup
+        type="single"
+        value={PRESETS.find((preset) => setsEqual(value, preset.days))?.label ?? ""}
+        onValueChange={(v) => {
+          const preset = PRESETS.find((p) => p.label === v)
+          if (preset) onChange([...preset.days])
+        }}
+        className="mt-2.75 gap-2"
+      >
         {PRESETS.map((preset) => (
-          <button
+          <ToggleGroupItem
             key={preset.label}
-            type="button"
-            onClick={() => onChange([...preset.days])}
+            value={preset.label}
             className={cn(
-              "rounded-full border px-3.25 py-1.75 text-[12.5px] font-medium transition-colors",
-              setsEqual(value, preset.days)
-                ? "border-[#2e2e2e] bg-[#222222] text-ink-soft"
-                : "border-edge-chip text-ink-dim"
+              "rounded-full border border-edge-chip px-3.25 py-1.75 text-[12.5px]",
+              "data-[state=on]:border-[#2e2e2e] data-[state=on]:bg-[#222222] data-[state=on]:text-ink-soft"
             )}
           >
             {preset.label}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
-      <FieldError msg={error} />
+      </ToggleGroup>
+      <FieldError msg={error ?? (value.length === 0 ? "Pick at least one day" : undefined)} />
     </div>
   )
 }

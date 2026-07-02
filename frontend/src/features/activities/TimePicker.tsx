@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
@@ -22,6 +22,11 @@ type TimePickerProps = {
 
 export function TimePicker({ value, onChange, className }: TimePickerProps) {
   const [open, setOpen] = useState(false)
+  const selectedRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (open) selectedRef.current?.scrollIntoView({ block: "center" })
+  }, [open])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -45,7 +50,7 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
             <button
               key={t}
               type="button"
-              ref={selected ? (el) => el?.scrollIntoView({ block: "center" }) : undefined}
+              ref={selected ? selectedRef : undefined}
               onClick={() => {
                 onChange(t)
                 setOpen(false)

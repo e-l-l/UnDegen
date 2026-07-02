@@ -36,14 +36,14 @@ export function NewActivityDialog({ userId, onClose }: NewActivityDialogProps) {
       >
         {/* mobile header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-[#171717] px-5.5 pt-6 pb-3 lg:hidden">
-          <button type="button" onClick={onClose} aria-label="Back" className="text-ink-dim">
+          <Button type="button" onClick={onClose} aria-label="Back" variant="ghost" size="icon" className="size-8 text-ink-dim">
             <ChevronLeft className="size-5.5" />
-          </button>
+          </Button>
           <DialogTitle className="text-[16px]">New activity</DialogTitle>
           <DialogClose asChild>
-            <button type="button" aria-label="Close" className="flex w-5.5 justify-end text-ink-muted">
+            <Button type="button" aria-label="Close" variant="ghost" size="icon" className="size-8 text-ink-muted">
               <X className="size-4" />
-            </button>
+            </Button>
           </DialogClose>
         </div>
 
@@ -51,13 +51,9 @@ export function NewActivityDialog({ userId, onClose }: NewActivityDialogProps) {
         <div className="hidden flex-shrink-0 items-center justify-between border-b border-[#2c2c2c] px-6.5 py-5.5 lg:flex">
           <DialogTitle>New activity</DialogTitle>
           <DialogClose asChild>
-            <button
-              type="button"
-              aria-label="Close"
-              className="text-ink-dim transition-colors hover:text-ink"
-            >
+            <Button type="button" aria-label="Close" variant="ghost" size="icon" className="size-8 text-ink-dim hover:text-ink">
               <X className="size-5" />
-            </button>
+            </Button>
           </DialogClose>
         </div>
 

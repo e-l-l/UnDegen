@@ -9,9 +9,6 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  server: {
-    allowedHosts: ['404f-49-205-210-122.ngrok-free.app'],
-  },
   plugins: [react(), tailwindcss(), VitePWA({
     strategies: 'injectManifest',
     srcDir: 'src',
