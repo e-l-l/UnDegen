@@ -22,9 +22,17 @@ export function DesktopIsland({ streak }: DesktopIslandProps) {
   // impersonation of a native app inside a browser tab, so they're dropped;
   // the floating nav island itself is kept as a legitimate, chrome-independent
   // design choice.
+  // Absolute overlay, not a normal-flow flex item: a transparent flex row
+  // sitting above the body still pushes the Long-tasks rail's bg/border to
+  // start below it, reading as a seam between "island strip" and "body strip"
+  // even with no fill of its own. Overlaying the island and letting the body
+  // fill the full window height keeps the rail's surface continuous
+  // top-to-bottom, with the island floating over it. Root is pointer-events
+  // none so it doesn't block the body underneath; the two interactive
+  // clusters opt back in.
   return (
-    <div className="relative flex h-16.5 shrink-0 items-center justify-end px-4.5">
-      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.75 rounded-full border border-[#282828] bg-[#191919] p-1.25 shadow-[0_10px_26px_rgba(0,0,0,0.5)]">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16.5 items-center justify-end px-4.5">
+      <div className="pointer-events-auto absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.75 rounded-full border border-[#282828] bg-[#191919] p-1.25 shadow-[0_10px_26px_rgba(0,0,0,0.5)]">
         {SEGMENTS.map(({ label, Icon, active }) => (
           <div
             key={label}
@@ -46,7 +54,7 @@ export function DesktopIsland({ streak }: DesktopIslandProps) {
         ))}
       </div>
 
-      <div className="flex items-center gap-1.75 rounded-full border border-edge-panel bg-[#161616] py-1.25 pr-3 pl-2.5">
+      <div className="pointer-events-auto flex items-center gap-1.75 rounded-full border border-edge-panel bg-[#161616] py-1.25 pr-3 pl-2.5">
         <Flame className="size-3.5 text-pink" strokeWidth={1.8} />
         <span className="text-[12.5px] font-semibold tabular-nums text-[#d6d6d6]">{streak}</span>
         <span className="text-[12.5px] text-ink-dim">day streak</span>

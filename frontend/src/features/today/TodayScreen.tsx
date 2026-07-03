@@ -114,10 +114,14 @@ export function TodayScreen({ userId }: TodayScreenProps) {
       </div>
 
       {/* ════════ Desktop ════════ */}
-      <div className="hidden h-svh flex-col bg-background lg:flex">
+      {/* DesktopIsland is an absolute overlay (not a normal-flow row above the
+          body) so the rail's bg/border run full window height behind it —
+          see the comment in DesktopIsland.tsx. Each pane clears the island
+          with its own top padding instead. */}
+      <div className="relative hidden h-svh overflow-hidden bg-background lg:block">
         <DesktopIsland streak={data.streak} />
-        <div className="flex min-h-0 flex-1">
-          <div ref={desktopScrollRef} className="flex-1 overflow-auto px-9 py-[30px]">
+        <div className="flex h-full">
+          <div ref={desktopScrollRef} className="flex-1 overflow-auto px-9 pt-14.5 pb-[30px]">
             <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">{data.eyebrow}</div>
             <div className="mt-1.5 flex items-center justify-between">
               <div className="text-[27px] font-semibold tracking-[-0.02em] text-ink">Today</div>
@@ -144,7 +148,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             />
           </div>
 
-          <div className="w-[352px] shrink-0 overflow-auto border-l border-edge-panel bg-panel px-[22px] py-7">
+          <div className="w-[352px] shrink-0 overflow-auto border-l border-edge-panel bg-panel px-[22px] pt-19 pb-7">
             <div className="text-[16px] font-semibold text-[#e6e6e6]">Long tasks</div>
             <div className="mt-1 text-[13px] text-ink-faint">Needs a focus session, not a checkbox.</div>
             <div className="mt-[18px] flex flex-col gap-3.5">
