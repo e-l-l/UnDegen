@@ -1,15 +1,15 @@
-import { BarChart3, List, User } from "lucide-react"
+import { BarChart3, List } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 // Desktop drops the mobile Focus tab — long tasks/focus sessions already have
 // a home in the Long-tasks rail on this form factor, so a separate Focus
 // destination would be redundant here (mobile has no side rail, so it keeps
-// its own Focus tab). Stats/You are visual-only stubs: no router exists yet.
+// its own Focus tab). Stats is a visual-only stub: no router exists yet. You
+// tab hidden until specced.
 const SEGMENTS = [
   { label: "Today", Icon: List, active: true },
   { label: "Stats", Icon: BarChart3, active: false },
-  { label: "You", Icon: User, active: false },
 ] as const
 
 export function DesktopIsland() {

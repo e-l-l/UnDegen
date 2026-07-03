@@ -122,13 +122,13 @@ export function TodayScreen({ userId }: TodayScreenProps) {
               <div className="text-[27px] font-semibold tracking-[-0.02em] text-ink">Today</div>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon"
+                size="sm"
                 aria-label="New activity"
                 onClick={() => setCreatingActivity(true)}
-                className="size-9 text-ink-dim hover:text-ink"
+                className="rounded-full px-3.5"
               >
-                <Plus className="size-5" strokeWidth={1.8} />
+                <Plus className="size-4" strokeWidth={2.2} />
+                New Activity
               </Button>
             </div>
             <div className="mt-1 mb-6 text-[14px] text-ink-muted">
