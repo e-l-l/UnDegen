@@ -3,6 +3,7 @@ import { Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { getCompletedSessions } from "@/db/taskHistory"
+import { todayLocal } from "@/db/recurrence"
 import type { Activity } from "@/db/types"
 import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
@@ -36,6 +37,10 @@ export function IdleZenCard({ activity, onStart }: IdleZenCardProps) {
   const weekSecs = (sessions ?? [])
     .filter((s) => new Date(s.started_at).getTime() >= weekAgo)
     .reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
+  const today = todayLocal()
+  const todaySecs = (sessions ?? [])
+    .filter((s) => todayLocal(new Date(s.started_at)) === today)
+    .reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
 
   return (
     <div className="rounded-[18px] border border-idle-border bg-idle-bg p-4.5">
@@ -63,7 +68,14 @@ export function IdleZenCard({ activity, onStart }: IdleZenCardProps) {
       )}
 
       <div className={`text-[12.5px] text-idle-caption ${hasHistory ? "mt-3" : "mt-4.5"}`}>
-        {hasHistory ? `${formatDuration(weekSecs / 60)} logged this week` : "No limit · not started"}
+        {hasHistory ? (
+          <>
+            <span className="font-medium text-idle-caption-strong">{formatDuration(todaySecs / 60)}</span> today ·{" "}
+            {formatDuration(weekSecs / 60)} this week
+          </>
+        ) : (
+          "No limit · not started"
+        )}
       </div>
 
       <Button
