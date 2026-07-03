@@ -7,7 +7,7 @@ Local context for this node. Root context (product, tone, settled decisions) liv
 └── frontend/   ← YOU ARE HERE — the whole app, a React PWA (Vite)
     └── src/
         ├── db/            → see frontend/src/db/CONTEXT.md  (data layer + write API: repo.ts)
-        ├── sync/          → syncEngine.ts — drains syncQueue → Supabase (covered below)
+        ├── sync/          → push (syncEngine.ts) + pull (pull.ts/useSync.ts) — Dexie ⇄ Supabase (covered below)
         ├── utils/         → supabase client (covered below)
         ├── lib/           → cn() util (shadcn)
         ├── components/ui/ → shadcn primitives (button, input, label, dialog, toggle-group, popover, calendar)
@@ -99,7 +99,16 @@ The screen that replaced `App.tsx`'s old placeholder: a time-ordered timeline of
 
 Six lines: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)`. Needs those two env vars (`.env`, gitignored).
 
-**Behaviour to respect:** this client is the *only* path to the cloud, and per the architecture it must **never be read from in the UI critical path** — UI reads come from Dexie. The cloud is written to only by the sync engine (`src/sync/syncEngine.ts`) draining the queue; feature code mutates via `src/db/repo.ts`, never by calling `supabase` directly.
+**Behaviour to respect:** this client is the *only* path to the cloud, and per the architecture it must **never be read from in the UI critical path** — UI reads come from Dexie. Two background flows use it, both in `src/sync/` (see next section): **push** drains the queue → Supabase, **pull** reads Supabase → reconciles into Dexie. The pull reads the cloud but hydrates Dexie, not the render path, so the contract holds. Feature code mutates via `src/db/repo.ts` and reads via Dexie, never by calling `supabase` directly.
+
+## Sync — `src/sync/`
+
+Two directions, both background, both off the render path (UI always reads Dexie):
+
+- **push / flush** — `syncEngine.ts`: drains `syncQueue` → Supabase. `startSync()` (called in `main.tsx`) runs the first flush and re-flushes on `online`. `update` ops use `.update().eq` (not `upsert`) so a queued edit can't resurrect a row another device deleted.
+- **pull / hydrate** — `pull.ts` `pullAll()`: re-reads the user's full row set (RLS-scoped) and reconciles into Dexie — server wins except rows with a pending `syncQueue` entry; local rows absent server-side are deleted (**a delete is terminal**). `useSync(userId)` (mounted in `App`'s signed-in subtree) fires it on session-active + `online` + app-foreground. Full contract in `db/CONTEXT.md`; rationale in ADR 0002.
+
+Glossary: **push/flush** = Dexie→Supabase · **pull/hydrate** = Supabase→Dexie · **sync** = the pair. Note `startSync` is push-only despite the generic name — pull is wired separately through `useSync` because it needs a `userId` and an auth-ready trigger that `main.tsx`'s pre-render `startSync()` can't supply.
 
 ## PWA — `vite.config.ts` + `src/sw.ts`
 
@@ -109,6 +118,7 @@ Six lines: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)`. Nee
 - **Periodic SW update:** enabled, 1h interval — users keep the app open all day; navigation-only checks aren't enough.
 - **Offline-ready prompt:** enabled, auto-dismiss — offline is a core feature, users need to know it's ready.
 - **Icon generation:** `@vite-pwa/assets-generator` `minimal-2023` preset (`pwa-assets.config.ts`) — one source SVG → all iOS/Android/favicon sizes.
+- **Edge-to-edge / safe areas:** `index.html` sets `viewport-fit=cover` (+ `apple-mobile-web-app-capable`, `theme-color #0f0f0f`). `viewport-fit=cover` is what makes `env(safe-area-inset-*)` report real values; `theme-color` tints the opaque status bar so, on a dark app, it reads as seamless. **Deliberately NOT using `apple-mobile-web-app-status-bar-style=black-translucent`** — on standalone iOS it shortens the usable viewport at the bottom (top-anchored layouts then show dead space below the tab bar); the opaque `#0f0f0f` bar looks identical here without the quirk. Consequence: any full-bleed or `fixed`/edge element must pad itself with `env(safe-area-inset-*)` (see the mobile header, `MobileTabBar`, and the FAB in `features/today/`) — a hardcoded top/bottom pad will be wrong per-device. Metas are read at launch, so the installed PWA must be re-added to the home screen to pick up changes.
 
 **`src/sw.ts` current state:** still essentially the vite-pwa template — precache + `cleanupOutdatedCaches` + a navigation fallback + a `SKIP_WAITING` message handler. The planned **`push` event listener and background-sync handlers are NOT here yet.** Add them here when Web Push / offline-flush land.
 

@@ -17,9 +17,10 @@ frontend/src/
 
 ## The core contract (do not break)
 
-1. **All reads come from Dexie. Never from Supabase in the UI critical path.** Supabase is the cloud mirror, not the read source.
-2. **Write path:** go through `repo.ts` — it writes Dexie (instant) → enqueues a `SyncQueueItem` (same transaction) → `src/sync/syncEngine.ts` flushes to Supabase when online (`upsert` for insert/update, `delete` for delete). Drain is single-flight, in `++id` order (FK-safe: parents before children), and stops at the first failure to retry later. Triggers: startup, `online` event, and after each mutation. **Known v0 gap:** a permanently-failing ("poison") item blocks the queue — failures are assumed transient; no SW background-sync trigger yet.
+1. **All reads come from Dexie. Never from Supabase in the UI critical path.** Supabase is the cloud mirror, not the read source. (Sync-*down* does read Supabase — but into Dexie, in the background, never the render path; see #4.)
+2. **Write path (push):** go through `repo.ts` — it writes Dexie (instant) → enqueues a `SyncQueueItem` (same transaction) → `src/sync/syncEngine.ts` flushes to Supabase when online (`upsert` for insert, **`.update().eq` for update — not upsert**, so a queued edit can't resurrect a row another device deleted; `delete` for delete). Drain is single-flight, in `++id` order (FK-safe: parents before children), and stops at the first failure to retry later. Triggers: startup, `online` event, and after each mutation. **Known v0 gap:** a permanently-failing ("poison") item blocks the queue — failures are assumed transient; no SW background-sync trigger yet.
 3. **No stored derived values** (streaks, completion rates). Compute on read.
+4. **Read-down path (pull):** `src/sync/pull.ts` `pullAll()` re-reads the user's full row set from Supabase (RLS-scoped) and reconciles into Dexie — **server wins, except rows with a pending `syncQueue` entry** (unflushed local writes are never overwritten or deleted, so an offline create isn't eaten). Full-set, not incremental (most tables lack an `updated_at`/tombstone). **Invariant: a delete is terminal** — reconcile drops local rows absent server-side, and flush's `.update()` (see #2) means no concurrent edit brings a deleted row back. Accepted limit: two devices editing the *same* row offline → last flush wins (no field-level merge without `updated_at`). Triggers (from `useSync`): session active, `online`, app-foreground. See ADR 0002.
 
 ## Things that are non-obvious and load-bearing
 
@@ -38,7 +39,7 @@ frontend/src/
 
 ## Not built yet (expect to add here / nearby)
 
-- Sync flush is **built** (`src/sync/syncEngine.ts`). Still to add: SW background-sync trigger from `src/sw.ts`, and poison-item handling (currently a permanently-failing item blocks the queue).
+- Sync flush (push) is **built** (`src/sync/syncEngine.ts`); sync-down (pull) is **built** (`src/sync/pull.ts` + `src/sync/useSync.ts`, ADR 0002). Still to add: SW background-sync trigger from `src/sw.ts`, and poison-item handling (currently a permanently-failing item blocks the queue — and, because the pull flushes first, also stalls fresh pulls behind it).
 - **Streak calculation** — still a UI-side stub (`useTodayData.ts` returns a hardcoded `0`). Deriving it for real (consecutive days of what, exactly — every due reminder done? at least one?) is unresolved; do it here when it's built, per the "derived on read, not stored" rule.
 - **Abandoned sessions** — `completeWorkSession` only ever writes `status:'completed'`. Nothing sets `status:'abandoned'` (e.g. closing the tab mid-session) — an `in_progress` session just sits there until the user comes back and taps Stop. No cleanup/timeout job exists.
 - **Rule edits rewrite *uncompleted* derived history** (v0-accepted): editing an activity's recurrence re-derives past dates with no instantiated rows; dates that have completions are concrete and unaffected. `recurrence_start` bounds how far back derivation reaches.

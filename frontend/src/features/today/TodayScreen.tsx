@@ -76,7 +76,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
     <>
       {/* ════════ Mobile ════════ */}
       <div className="flex h-svh flex-col bg-background lg:hidden">
-        <div className="shrink-0 px-[22px] pt-[66px] pb-2">
+        <div className="shrink-0 px-[22px] pt-[calc(env(safe-area-inset-top)_+_0.5rem)] pb-2">
           <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">{data.eyebrow}</div>
           <div className="mt-2 flex items-center justify-between">
             <div className="text-[30px] font-semibold tracking-[-0.02em] text-ink">Today</div>
@@ -107,7 +107,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
           type="button"
           onClick={() => setCreatingActivity(true)}
           aria-label="New activity"
-          className="fixed right-5 bottom-[104px] flex size-14 items-center justify-center rounded-full bg-pink text-on-pink shadow-[0_0_22px_rgba(242,167,187,0.22)]"
+          className="fixed right-5 bottom-[calc(104px_+_env(safe-area-inset-bottom))] flex size-14 items-center justify-center rounded-full bg-pink text-on-pink shadow-[0_0_22px_rgba(242,167,187,0.22)]"
         >
           <Plus className="size-6" strokeWidth={2} />
         </button>

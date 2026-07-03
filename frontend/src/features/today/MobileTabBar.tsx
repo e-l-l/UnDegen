@@ -15,7 +15,7 @@ const TABS = [
 
 export function MobileTabBar() {
   return (
-    <div className="flex shrink-0 border-t border-surface-raised bg-background px-4.5 pt-2.5 pb-7.5">
+    <div className="flex shrink-0 border-t border-surface-raised bg-background px-4.5 pt-2.5 pb-[calc(env(safe-area-inset-bottom)_+_0.625rem)]">
       {TABS.map(({ label, Icon, active }) => (
         <div key={label} className="flex flex-1 flex-col items-center gap-1.25">
           <Icon className={cn("size-5.5", active ? "text-pink" : "text-ink-faint")} strokeWidth={1.6} />

@@ -35,10 +35,15 @@ async function drainOnce(): Promise<void> {
   for (const item of items) {
     const table = item.table as TableName
     try {
+      // insert → upsert (retry-idempotent on the same uuid). update → .update().eq,
+      // NOT upsert: if another device deleted the row, an upsert would resurrect it —
+      // .update() matches 0 rows and no-ops, so the delete stands (delete is terminal).
       const { error } =
         item.op === "delete"
           ? await supabase.from(table).delete().eq("id", item.rowId)
-          : await supabase.from(table).upsert(item.payload ?? {})
+          : item.op === "update"
+            ? await supabase.from(table).update(item.payload ?? {}).eq("id", item.rowId)
+            : await supabase.from(table).upsert(item.payload ?? {})
       if (error) throw new Error(error.message)
       await db.syncQueue.delete(item.id as number)
     } catch (err) {
