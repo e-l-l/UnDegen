@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Moon, Square } from "lucide-react"
+import { Square } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { Activity, WorkSession } from "@/db/types"
@@ -36,7 +36,7 @@ export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCa
   const pct = isGoal && goalSecs > 0 ? Math.min(1, elapsedSecs / goalSecs) : 0
   const minsLeft = isGoal && goalSecs > 0 ? Math.max(0, Math.ceil((goalSecs - elapsedSecs) / 60)) : 0
 
-  const Icon = isGoal ? iconForActivity(activity) : Moon
+  const Icon = iconForActivity(activity)
 
   return (
     <div className="relative overflow-hidden rounded-[18px] border border-session-border bg-session-bg p-4.5 motion-safe:animate-session-glow lg:rounded-2xl">
@@ -104,7 +104,7 @@ export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCa
         type="button"
         variant="outline"
         onClick={() => onStop(session)}
-        className="mt-4 h-11.5 w-full rounded-[13px] text-[14.5px] font-medium lg:h-11 lg:rounded-xl"
+        className="mt-4 h-11.5 w-full rounded-[13px] text-[14.5px] font-medium hover:border-pink/40 hover:bg-pink/10 hover:text-pink lg:h-11 lg:rounded-xl"
       >
         <Square className="size-3 fill-current" strokeWidth={0} />
         {isGoal ? "Stop session" : "Finish"}
