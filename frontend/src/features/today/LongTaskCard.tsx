@@ -4,6 +4,7 @@ import { Play, Square, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { DayItem } from "@/db/dayView"
 import type { WorkSession } from "@/db/types"
+import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
 
 interface LongTaskCardProps {
@@ -36,7 +37,7 @@ export function LongTaskCard({ item, now, onStart, onStop }: LongTaskCardProps) 
         icon={Icon}
         name={activity.name}
         progress={progress}
-        meta={`In progress · ${Math.round(elapsedSecs / 60)}m elapsed`}
+        meta={`In progress · ${formatDuration(elapsedSecs / 60)} elapsed`}
       >
         <Button type="button" variant="outline" onClick={() => onStop(active)} className="mt-3.5 h-11 w-full rounded-xl text-[14.5px]">
           <Square className="size-2.75 fill-current" strokeWidth={0} />
@@ -49,7 +50,7 @@ export function LongTaskCard({ item, now, onStart, onStop }: LongTaskCardProps) 
   if (completedSecs > 0) {
     const progress = goalSecs > 0 ? Math.min(1, completedSecs / goalSecs) : 1
     return (
-      <Card icon={Icon} name={activity.name} progress={progress} meta={`${Math.round(completedSecs / 60)}m done today`}>
+      <Card icon={Icon} name={activity.name} progress={progress} meta={`${formatDuration(completedSecs / 60)} done today`}>
         <Button type="button" onClick={onStart} className="mt-3.5 h-11 w-full rounded-xl text-[14.5px]">
           <Play className="size-3.25 fill-current" strokeWidth={0} />
           Start session

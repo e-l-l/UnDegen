@@ -2,6 +2,7 @@ import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
+import { useDialogPortalContainer } from "./dialog"
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -17,8 +18,15 @@ function PopoverContent({
   sideOffset = 6,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  // Nested inside a Dialog, portal into Dialog.Content's own subtree instead
+  // of document.body — otherwise Dialog's modal scroll-lock treats this
+  // content as outside its bounds and swallows wheel/touch scroll over it
+  // (see dialog.tsx's useDialogPortalContainer for the full explanation).
+  // Outside a Dialog this is null, so Portal falls back to its document.body default.
+  const dialogContainer = useDialogPortalContainer()
+
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={dialogContainer ?? undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

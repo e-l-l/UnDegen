@@ -19,6 +19,20 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
+// Radix Dialog's modal scroll-lock (react-remove-scroll) only exempts wheel/
+// touch events whose target is a DOM descendant of Dialog.Content itself. A
+// Popover/Select nested inside a Dialog portals its content to document.body
+// by default — a DOM sibling, not a descendant — so the lock swallows wheel/
+// touch scroll over it (only scrollbar-thumb drag, which sets scrollTop via
+// JS, still works). Exposing this container lets nested popovers portal into
+// Dialog.Content's own subtree instead, so the lock treats their scroll as
+// in-bounds. See popover.tsx's PopoverContent for the consumer side.
+const DialogPortalContainerContext = React.createContext<HTMLElement | null>(null)
+
+export function useDialogPortalContainer() {
+  return React.useContext(DialogPortalContainerContext)
+}
+
 function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
@@ -43,6 +57,8 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const [portalContainer, setPortalContainer] = React.useState<HTMLDivElement | null>(null)
+
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -56,7 +72,8 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
+        <DialogPortalContainerContext.Provider value={portalContainer}>{children}</DialogPortalContainerContext.Provider>
+        <div ref={setPortalContainer} data-slot="dialog-portal-container" className="contents" />
       </DialogPrimitive.Content>
     </DialogPortal>
   )
