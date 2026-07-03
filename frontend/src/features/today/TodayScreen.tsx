@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react"
-import { Flame, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { todayLocal } from "@/db/recurrence"
@@ -76,21 +76,15 @@ export function TodayScreen({ userId }: TodayScreenProps) {
     <>
       {/* ════════ Mobile ════════ */}
       <div className="flex h-svh flex-col bg-background lg:hidden">
-        <div className="shrink-0 px-[22px] pt-[calc(env(safe-area-inset-top)_+_0.5rem)] pb-2">
+        <div className="shrink-0 px-5.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2">
           <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">{data.eyebrow}</div>
-          <div className="mt-2 flex items-center justify-between">
-            <div className="text-[30px] font-semibold tracking-[-0.02em] text-ink">Today</div>
-            <div className="flex items-center gap-[7px] rounded-full border border-edge-chip bg-surface px-3 py-[6px]">
-              <Flame className="size-3.5 text-pink" strokeWidth={1.8} />
-              <span className="text-[14px] font-semibold text-[#bfbfbf]">{data.streak}</span>
-            </div>
-          </div>
+          <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-ink">Today</div>
           <div className="mt-1.5 text-[14px] text-ink-muted">
             {data.doneCount} done · {data.toGoCount} to go today
           </div>
         </div>
 
-        <div ref={mobileScrollRef} className="flex-1 overflow-auto px-[22px] pb-2">
+        <div ref={mobileScrollRef} className="flex-1 overflow-auto px-5.5 pb-2">
           <Timeline
             ref={mobileNowRef}
             earlier={data.earlier}
@@ -107,7 +101,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
           type="button"
           onClick={() => setCreatingActivity(true)}
           aria-label="New activity"
-          className="fixed right-5 bottom-[calc(104px_+_env(safe-area-inset-bottom))] flex size-14 items-center justify-center rounded-full bg-pink text-on-pink shadow-[0_0_22px_rgba(242,167,187,0.22)]"
+          className="fixed right-5 bottom-[calc(104px+env(safe-area-inset-bottom))] flex size-14 items-center justify-center rounded-full bg-pink text-on-pink shadow-[0_0_22px_rgba(242,167,187,0.22)]"
         >
           <Plus className="size-6" strokeWidth={2} />
         </button>
@@ -120,9 +114,9 @@ export function TodayScreen({ userId }: TodayScreenProps) {
           with its own top padding, derived from --island-h (index.css) plus a
           small per-pane gap, so the island height lives in one place. */}
       <div className="relative hidden h-svh overflow-hidden bg-background lg:block">
-        <DesktopIsland streak={data.streak} />
+        <DesktopIsland />
         <div className="flex h-full">
-          <div ref={desktopScrollRef} className="flex-1 overflow-auto px-9 pt-[calc(var(--island-h)-0.5rem)] pb-[30px]">
+          <div ref={desktopScrollRef} className="flex-1 overflow-auto px-9 pt-[calc(var(--island-h)-0.5rem)] pb-7.5">
             <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">{data.eyebrow}</div>
             <div className="mt-1.5 flex items-center justify-between">
               <div className="text-[27px] font-semibold tracking-[-0.02em] text-ink">Today</div>
@@ -149,15 +143,14 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             />
           </div>
 
-          <div className="w-[352px] shrink-0 overflow-auto border-l border-edge-panel bg-panel px-[22px] pt-[calc(var(--island-h)+0.625rem)] pb-7">
+          <div className="w-110 shrink-0 overflow-auto border-l border-edge-panel bg-panel px-5.5 pt-[calc(var(--island-h)+0.625rem)] pb-7">
             <div className="text-[16px] font-semibold text-[#e6e6e6]">Long tasks</div>
             <div className="mt-1 text-[13px] text-ink-faint">Needs a focus session, not a checkbox.</div>
-            <div className="mt-[18px] flex flex-col gap-3.5">
+            <div className="mt-4.5 flex flex-col gap-3.5">
               {data.longTasks.map((item) => (
                 <LongTaskCard
                   key={item.activity.id}
                   item={item}
-                  now={data.now}
                   onStart={() => startSession(item.activity.id)}
                   onStop={stopSession}
                 />

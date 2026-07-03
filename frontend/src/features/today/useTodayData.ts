@@ -93,7 +93,7 @@ export function useTodayData(userId: string): TodayData {
       longTasks,
       now,
       nowLabel: formatTimeLabel(nowMinutes),
-      streak: 0, // stub — real derived-streak calc is a follow-up task
+      streak: 0, // stub — real derived-streak calc is a follow-up task; consumed by stats page, not Today UI
     }
   }, [items, now])
 }

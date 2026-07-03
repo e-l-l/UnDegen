@@ -43,6 +43,16 @@
   --pink-hover: #e8879f; /* pressed/active pink */
   --on-pink: #1a1012;
 
+  /* active work-session card — pink extended to a second sanctioned use here
+     ("live/active indicator", alongside CTA + brand mark; see CLAUDE.md) */
+  --session-bg: #1c1418;
+  --session-border: #3a2830;
+  --session-icon-bg: #241a1e;
+  --session-track: #2a1e22;
+  --session-timer: #f5eaed;
+  --session-title: #f0e4e8;
+  --session-muted: #8a6d75;
+
   /* desktop floating nav island height — panes derive their top clearance
      from this (calc off var(--island-h)) so the three stay in sync */
   --island-h: 4.125rem; /* 66px */
@@ -101,6 +111,67 @@
   --color-ink-body: var(--ink-body);
   --color-ink-soft: var(--ink-soft);
   --color-ink: var(--ink);
+
+  --color-session-bg: var(--session-bg);
+  --color-session-border: var(--session-border);
+  --color-session-icon-bg: var(--session-icon-bg);
+  --color-session-track: var(--session-track);
+  --color-session-timer: var(--session-timer);
+  --color-session-title: var(--session-title);
+  --color-session-muted: var(--session-muted);
+}
+
+/* Active work-session card animations — decorative, looped, disabled under
+   prefers-reduced-motion via the motion-safe: variant at each call site
+   (layout/colors stay, only the loop stops). */
+@theme {
+  --animate-session-glow: sessionGlow 3.4s ease-in-out infinite;
+  --animate-session-ring: sessionRing 2.2s ease-out infinite;
+  --animate-session-pulse: sessionPulse 1.6s ease-in-out infinite;
+  --animate-session-shimmer: sessionShimmer 1.8s linear infinite;
+
+  @keyframes sessionGlow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgba(242, 167, 187, 0.06),
+        0 8px 30px rgba(242, 167, 187, 0.08);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px rgba(242, 167, 187, 0.16),
+        0 10px 42px rgba(242, 167, 187, 0.2);
+    }
+  }
+  @keyframes sessionRing {
+    0% {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    100% {
+      transform: scale(1.55);
+      opacity: 0;
+    }
+  }
+  @keyframes sessionPulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.4);
+      opacity: 0.5;
+    }
+  }
+  @keyframes sessionShimmer {
+    0% {
+      transform: translateX(-130%);
+    }
+    100% {
+      transform: translateX(130%);
+    }
+  }
 }
 
 @layer base {

@@ -1,4 +1,4 @@
-import { BarChart3, Flame, List, User } from "lucide-react"
+import { BarChart3, List, User } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -12,11 +12,7 @@ const SEGMENTS = [
   { label: "You", Icon: User, active: false },
 ] as const
 
-interface DesktopIslandProps {
-  streak: number
-}
-
-export function DesktopIsland({ streak }: DesktopIslandProps) {
+export function DesktopIsland() {
   // A macOS-style window frame (traffic lights, rounded/bordered outer
   // border) was considered and rejected: this is a browser-tab PWA, not an
   // Electron/native shell, and the real browser window already supplies
@@ -46,12 +42,6 @@ export function DesktopIsland({ streak }: DesktopIslandProps) {
             </span>
           </div>
         ))}
-      </div>
-
-      <div className="pointer-events-auto flex items-center gap-1.75 rounded-full border border-edge-panel bg-surface-raised py-1.25 pr-3 pl-2.5">
-        <Flame className="size-3.5 text-pink" strokeWidth={1.8} />
-        <span className="text-[12.5px] font-semibold tabular-nums text-[#d6d6d6]">{streak}</span>
-        <span className="text-[12.5px] text-ink-dim">day streak</span>
       </div>
     </div>
   )

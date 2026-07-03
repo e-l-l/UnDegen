@@ -1,15 +1,15 @@
 import type { ReactNode } from "react"
-import { Play, Square, type LucideIcon } from "lucide-react"
+import { Play, type LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { DayItem } from "@/db/dayView"
 import type { WorkSession } from "@/db/types"
 import { formatDuration } from "@/lib/utils"
+import { ActiveSessionCard } from "./ActiveSessionCard"
 import { iconForActivity } from "./iconForActivity"
 
 interface LongTaskCardProps {
   item: DayItem
-  now: Date
   onStart: () => void
   onStop: (session: WorkSession) => void
 }
@@ -19,7 +19,7 @@ interface LongTaskCardProps {
 // i.e. one calendar day — no cross-day cumulative query exists today).
 // Progress is scoped to *today's* sessions only, which getDayItems already
 // returns, rather than fabricating an all-time stat.
-export function LongTaskCard({ item, now, onStart, onStop }: LongTaskCardProps) {
+export function LongTaskCard({ item, onStart, onStop }: LongTaskCardProps) {
   const { activity, sessions } = item
   const Icon = iconForActivity(activity)
   const active = sessions.find((s) => s.status === "in_progress")
@@ -30,21 +30,7 @@ export function LongTaskCard({ item, now, onStart, onStop }: LongTaskCardProps) 
   const goalSecs = (activity.goal_duration_mins ?? 0) * 60
 
   if (active) {
-    const elapsedSecs = (now.getTime() - new Date(active.started_at).getTime()) / 1000
-    const progress = goalSecs > 0 ? Math.min(1, elapsedSecs / goalSecs) : 0
-    return (
-      <Card
-        icon={Icon}
-        name={activity.name}
-        progress={progress}
-        meta={`In progress · ${formatDuration(elapsedSecs / 60)} elapsed`}
-      >
-        <Button type="button" variant="outline" onClick={() => onStop(active)} className="mt-3.5 h-11 w-full rounded-xl text-[14.5px]">
-          <Square className="size-2.75 fill-current" strokeWidth={0} />
-          Stop session
-        </Button>
-      </Card>
-    )
+    return <ActiveSessionCard activity={activity} session={active} onStop={onStop} />
   }
 
   if (completedSecs > 0) {
