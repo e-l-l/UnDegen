@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Square } from "lucide-react"
+import { Check } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { Activity, WorkSession } from "@/db/types"
@@ -104,10 +104,10 @@ export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCa
         type="button"
         variant="outline"
         onClick={() => onStop(session)}
-        className="mt-4 h-11.5 w-full rounded-[13px] text-[14.5px] font-medium hover:border-pink/40 hover:bg-pink/10 hover:text-pink lg:h-11 lg:rounded-xl"
+        className="mt-4 h-11.5 w-full rounded-[13px] border-pink/28 bg-pink/10 text-[14.5px] font-medium text-pink hover:border-pink/40 hover:bg-pink/15 hover:text-pink lg:h-11 lg:rounded-xl"
       >
-        <Square className="size-3 fill-current" strokeWidth={0} />
-        {isGoal ? "Stop session" : "Finish"}
+        <Check className="size-3.5" strokeWidth={2.5} />
+        Finish session
       </Button>
     </div>
   )

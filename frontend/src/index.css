@@ -53,6 +53,19 @@
   --session-title: #f0e4e8;
   --session-muted: #8a6d75;
 
+  /* idle long-task card — flatter/cooler than the active card on purpose:
+     pink is a temperature reserved for "happening right now", so idle cards
+     get personality from greyscale craft instead (see LongTaskCard.tsx) */
+  --idle-bg: #141414;
+  --idle-border: #232323;
+  --idle-icon-bg: #1a1a1a;
+  --idle-icon-border: #2a2a2a;
+  --idle-title: #e8e8e8;
+  --idle-label: #5e5e5e;
+  --idle-track: #232323;
+  --idle-caption: #6e6e6e;
+  --idle-caption-strong: #c8c8c8;
+
   /* desktop floating nav island height — panes derive their top clearance
      from this (calc off var(--island-h)) so the three stay in sync */
   --island-h: 4.125rem; /* 66px */
@@ -119,6 +132,16 @@
   --color-session-timer: var(--session-timer);
   --color-session-title: var(--session-title);
   --color-session-muted: var(--session-muted);
+
+  --color-idle-bg: var(--idle-bg);
+  --color-idle-border: var(--idle-border);
+  --color-idle-icon-bg: var(--idle-icon-bg);
+  --color-idle-icon-border: var(--idle-icon-border);
+  --color-idle-title: var(--idle-title);
+  --color-idle-label: var(--idle-label);
+  --color-idle-track: var(--idle-track);
+  --color-idle-caption: var(--idle-caption);
+  --color-idle-caption-strong: var(--idle-caption-strong);
 }
 
 /* Active work-session card animations — decorative, looped, disabled under
