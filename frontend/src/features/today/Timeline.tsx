@@ -19,6 +19,18 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
   { earlier, upNext, nowLabel, onToggleDone },
   nowRef
 ) {
+  const rows = (buckets: ReminderBucket[]) =>
+    buckets.map(({ item, timeLabel }) => (
+      <ReminderRow
+        key={item.activity.id}
+        time={timeLabel}
+        title={item.activity.name}
+        Icon={iconForActivity(item.activity)}
+        done={item.completion?.status === "done"}
+        onToggle={() => onToggleDone(item.activity.id)}
+      />
+    ))
+
   return (
     <>
       {earlier.length > 0 && (
@@ -26,16 +38,7 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           Earlier today
         </div>
       )}
-      {earlier.map(({ item, timeLabel }) => (
-        <ReminderRow
-          key={item.activity.id}
-          time={timeLabel}
-          title={item.activity.name}
-          Icon={iconForActivity(item.activity)}
-          done={item.completion?.status === "done"}
-          onToggle={() => onToggleDone(item.activity.id)}
-        />
-      ))}
+      {rows(earlier)}
       <div ref={nowRef}>
         <NowDivider time={nowLabel} />
       </div>
@@ -44,16 +47,7 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           Up next
         </div>
       )}
-      {upNext.map(({ item, timeLabel }) => (
-        <ReminderRow
-          key={item.activity.id}
-          time={timeLabel}
-          title={item.activity.name}
-          Icon={iconForActivity(item.activity)}
-          done={item.completion?.status === "done"}
-          onToggle={() => onToggleDone(item.activity.id)}
-        />
-      ))}
+      {rows(upNext)}
     </>
   )
 })

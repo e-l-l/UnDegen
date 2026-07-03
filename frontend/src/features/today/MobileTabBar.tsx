@@ -1,5 +1,7 @@
 import { BarChart3, Disc2, List, User } from "lucide-react"
 
+import { cn } from "@/lib/utils"
+
 // Mobile keeps a Focus tab (no side rail to surface long tasks on this form
 // factor) — desktop drops it in favor of the Long-tasks rail. See root
 // CLAUDE.md's nav divergence note. Focus/Stats/You are visual-only stubs: no
@@ -13,15 +15,11 @@ const TABS = [
 
 export function MobileTabBar() {
   return (
-    <div className="flex shrink-0 border-t border-[#161616] bg-background px-[18px] pt-2.5 pb-7.5">
+    <div className="flex shrink-0 border-t border-surface-raised bg-background px-4.5 pt-2.5 pb-7.5">
       {TABS.map(({ label, Icon, active }) => (
-        <div key={label} className="flex flex-1 flex-col items-center gap-[5px]">
-          <Icon className={active ? "size-[22px] text-pink" : "size-[22px] text-[#555555]"} strokeWidth={1.6} />
-          <span
-            className={
-              active ? "text-[10.5px] font-medium text-pink" : "text-[10.5px] font-medium text-[#555555]"
-            }
-          >
+        <div key={label} className="flex flex-1 flex-col items-center gap-1.25">
+          <Icon className={cn("size-5.5", active ? "text-pink" : "text-ink-faint")} strokeWidth={1.6} />
+          <span className={cn("text-[10.5px] font-medium", active ? "text-pink" : "text-ink-faint")}>
             {label}
           </span>
         </div>

@@ -3,13 +3,14 @@ import { Play, Square, type LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { DayItem } from "@/db/dayView"
+import type { WorkSession } from "@/db/types"
 import { iconForActivity } from "./iconForActivity"
 
 interface LongTaskCardProps {
   item: DayItem
   now: Date
   onStart: () => void
-  onStop: () => void
+  onStop: (session: WorkSession) => void
 }
 
 // There's no stored session-count target anywhere in the schema (Activity has
@@ -37,7 +38,7 @@ export function LongTaskCard({ item, now, onStart, onStop }: LongTaskCardProps) 
         progress={progress}
         meta={`In progress · ${Math.round(elapsedSecs / 60)}m elapsed`}
       >
-        <Button type="button" variant="outline" onClick={onStop} className="mt-3.5 h-11 w-full rounded-xl text-[14.5px]">
+        <Button type="button" variant="outline" onClick={() => onStop(active)} className="mt-3.5 h-11 w-full rounded-xl text-[14.5px]">
           <Square className="size-2.75 fill-current" strokeWidth={0} />
           Stop session
         </Button>
@@ -89,7 +90,7 @@ function Card({ icon: Icon, name, progress, meta, children }: CardProps) {
         </div>
         <div className="min-w-0 flex-1 text-[14.5px] font-medium text-[#d8d8d8]">{name}</div>
       </div>
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#2a2a2a]">
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-elevated">
         <div className="h-full rounded-full bg-pink" style={{ width: `${progress * 100}%` }} />
       </div>
       <div className="mt-2.25 text-[12px] text-ink-dim">{meta}</div>
