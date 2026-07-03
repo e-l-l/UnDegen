@@ -83,6 +83,42 @@ export interface WorkSession {
   note?: string | null
 }
 
+// ── Cloud-only tables (Supabase only — NOT mirrored in Dexie) ────────────────
+// Written direct to Supabase, bypassing the syncQueue: they're server-facing,
+// only exist while online, and are never read from Dexie in the UI critical
+// path. Mirrors supabase/migrations/0003_notifications.sql. See the push module.
+
+export interface UserSettings {
+  user_id: string
+  timezone: string // IANA, e.g. 'Asia/Kolkata'
+  quiet_hours_start?: string | null // reserved, no UI yet
+  quiet_hours_end?: string | null // reserved, no UI yet
+  created_at: string
+  updated_at: string
+}
+
+export interface PushSubscriptionRow {
+  id: string
+  user_id: string
+  endpoint: string // globally unique
+  p256dh: string
+  auth: string
+  user_agent?: string | null
+  created_at: string
+  last_seen: string
+}
+
+export interface NotificationLog {
+  id: string
+  user_id: string
+  activity_id: string
+  local_date: string // date
+  slot: string // 'HH:MM' — strict_time or a soft nudge time
+  sent_at: string
+  status?: string | null
+  error?: string | null
+}
+
 // ── syncQueue (local-only) — pending writes to flush to Supabase ─────────────
 export type TableName =
   | 'activities'

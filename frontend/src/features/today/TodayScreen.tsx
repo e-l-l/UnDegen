@@ -6,6 +6,8 @@ import { todayLocal } from "@/db/recurrence"
 import { completeWorkSession, markReminder, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
 import { NewActivityDialog } from "@/features/activities/NewActivityDialog"
+import { NotificationAsk } from "@/features/notifications/NotificationAsk"
+import { shouldOfferAsk } from "@/push/ask"
 import { supabase } from "@/utils/supabase"
 import { DesktopIsland } from "./DesktopIsland"
 import { LongTaskCard } from "./LongTaskCard"
@@ -37,6 +39,7 @@ function SignOutLink() {
 export function TodayScreen({ userId }: TodayScreenProps) {
   const data = useTodayData(userId)
   const [creatingActivity, setCreatingActivity] = useState(false)
+  const [askNotifications, setAskNotifications] = useState(false)
 
   const mobileScrollRef = useRef<HTMLDivElement>(null)
   const mobileNowRef = useRef<HTMLDivElement>(null)
@@ -162,7 +165,19 @@ export function TodayScreen({ userId }: TodayScreenProps) {
       </div>
 
       {creatingActivity && (
-        <NewActivityDialog userId={userId} onClose={() => setCreatingActivity(false)} />
+        <NewActivityDialog
+          userId={userId}
+          onClose={() => setCreatingActivity(false)}
+          onCreated={(type) => {
+            // Highest-intent moment to ask — but only for reminders, and only if
+            // we can still offer (not already granted/blocked, or iOS needs install).
+            if (type === "reminder" && shouldOfferAsk()) setAskNotifications(true)
+          }}
+        />
+      )}
+
+      {askNotifications && (
+        <NotificationAsk userId={userId} onClose={() => setAskNotifications(false)} />
       )}
     </>
   )

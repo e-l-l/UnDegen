@@ -1,6 +1,7 @@
 import { AuthScreen } from "@/features/auth/AuthScreen"
 import { TodayScreen } from "@/features/today/TodayScreen"
 import { useSession } from "@/hooks/useSession"
+import { useReconcileNotifications } from "@/push/useReconcile"
 import { useSync } from "@/sync/useSync"
 import PWABadge from "./PWABadge.tsx"
 
@@ -9,6 +10,7 @@ import PWABadge from "./PWABadge.tsx"
 // keeping it above App's loading/signed-out early returns would break rules-of-hooks.
 function SignedInApp({ userId }: { userId: string }) {
   useSync(userId)
+  useReconcileNotifications(userId)
   return (
     <>
       <TodayScreen userId={userId} />

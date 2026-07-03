@@ -1,0 +1,17 @@
+# Supabase CLI config. This repo now uses the CLI to manage the Edge Function
+# (see supabase/CONTEXT.md). SQL migrations may still be applied via the dashboard
+# or `supabase db push`.
+#
+# First-time setup:
+#   supabase login
+#   supabase link --project-ref <your-project-ref>
+#   supabase functions deploy send-notifications
+#   supabase secrets set VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:you@example.com CRON_SECRET=…
+# (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected into functions automatically.)
+
+project_id = "undegen"
+
+[functions.send-notifications]
+# Invoked only by pg_cron with the x-cron-secret header (validated in the function).
+# No user JWT is involved, so JWT verification is off.
+verify_jwt = false

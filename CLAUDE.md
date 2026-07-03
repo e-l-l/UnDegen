@@ -96,7 +96,10 @@ activities ──→ day_activities ←── days
 ```
 
 ### `users`
-Managed by Supabase Auth. No custom columns.
+Managed by Supabase Auth. No custom columns. Per-user app config lives in a **separate `user_settings` table** (keyed by `auth.users.id`) — currently the user's IANA `timezone` (load-bearing for server-side notification firing; see ADR 0003), plus reserved quiet-hours columns.
+
+### notification tables (`user_settings`, `push_subscriptions`, `notification_log`)
+Cloud-only, added by migration `0003` for Web Push (ADR 0003). Not mirrored in Dexie — the client writes them **direct** to Supabase (see What Not To Do), and the Edge Function reads them via service-role. `notification_log` is the claim-then-send idempotency ledger, unique on `(activity_id, local_date, slot)`.
 
 ### `activities`
 Template/definition of a trackable thing. Two types: `reminder` and `long_task`. Type-specific config lives as nullable columns on this table (no extension tables).
@@ -152,6 +155,9 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
 | Streak calculation | Derived on read | Computed from `completions`; not stored |
 | Missed detection | Derived on read, never written | No cron flip, no stored `missed` status; view computes it (`frontend/src/db/`: `recurrence.ts`, `dayView.ts`, `repo.ts`). ADR 0001 |
+| Notification firing | Poll-and-compute, server-side | `pg_cron` (1/min) → `send-notifications` Edge Function derives who's due now from `activities` + tz; no stored schedule. Claim-then-send via `notification_log` (at-most-once). ADR 0003 |
+| Timezone | Per-user IANA in `user_settings` | Needed to place zoneless `strict_time`; last-device-wins; DST-safe via `AT TIME ZONE`. Not per-device/per-activity. ADR 0003 |
+| Notification writes | Direct to Supabase | `push_subscriptions`/`user_settings` bypass Dexie/`syncQueue` — cloud-only, online-only, never read from Dexie. The one write exception |
 | Activity icons | Frontend string map | No icon/emoji column in DB; icon derived from `type` + `name` on the FE |
 | Package manager | npm | Solo project; familiarity over marginal speed gains |
 
@@ -160,13 +166,16 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 ## Open Questions (unresolved — flag before implementing)
 
 - **Recurrence exceptions** — a "skip" (`completion.status='skipped'`) marks an occurrence skipped but still *shows* it. Fully *removing* an occurrence from a date (hide it, don't archive the whole activity) is still unsolved; an `exception_dates: date[]` column on `activities` is the likely fix when needed.
-- **push_subscriptions table** — required for Web Push but not yet in the schema. Stores Web Push subscription objects per user for server-side notification triggering.
+- **Notification preferences UI** — global mute / quiet hours / per-activity mute have no screen. `user_settings.quiet_hours_*` columns are reserved but unread; enabling/disabling is only reachable via the post-create ask (no re-enable once granted/blocked) until a settings screen exists.
+
+*(Resolved: **push_subscriptions** — landed in migration `0003` alongside `user_settings` + `notification_log`; Web Push is built. See ADR 0003.)*
 
 ---
 
 ## What Not To Do
 
 - Don't read from the API in the UI critical path — always read from Dexie
+- Don't route cloud-only notification state (`push_subscriptions`, `user_settings`) through Dexie/`syncQueue` — write it direct to Supabase (the one documented write exception; see ADR 0003)
 - Don't store derived values (streaks, completion rates) — compute on read
 - Don't add a `type` column to `day_activities` — it's inferrable and creates drift
 - Don't add extension tables for activity config — use nullable columns on `activities`

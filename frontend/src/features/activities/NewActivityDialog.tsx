@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import type { ActivityType } from "@/db/types"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, X } from "./icons"
 import { NewActivityFormBody } from "./NewActivityFormBody"
@@ -8,6 +9,9 @@ import { useNewActivityForm } from "./useNewActivityForm"
 type NewActivityDialogProps = {
   userId: string
   onClose: () => void
+  // Fires after a successful create, with the type that was created — lets the
+  // parent offer the notifications ask only for reminders.
+  onCreated?: (type: ActivityType) => void
 }
 
 // One Radix Dialog underneath both form factors — reused for its focus-trap/
@@ -15,8 +19,11 @@ type NewActivityDialogProps = {
 // differs per breakpoint (lg, matching the rest of the app): a full-screen
 // takeover on mobile, a centered 620px card with a dimmed backdrop on desktop.
 // Mounted only while open (see App.tsx) so each open gets a fresh form.
-export function NewActivityDialog({ userId, onClose }: NewActivityDialogProps) {
-  const form = useNewActivityForm(userId, onClose)
+export function NewActivityDialog({ userId, onClose, onCreated }: NewActivityDialogProps) {
+  const form = useNewActivityForm(userId, (createdType) => {
+    onClose()
+    onCreated?.(createdType)
+  })
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>

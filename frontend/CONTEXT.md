@@ -41,7 +41,8 @@ What **is** real and load-bearing:
 - `src/utils/supabase.ts` — the Supabase client.
 - `src/index.css` — the **design system** (see below), imported by `main.tsx`. (A root-level `index.css` used to hold `@import "tailwindcss"` but nothing imported it — deleted. The live stylesheet is `src/index.css`.)
 - `src/App.tsx` — the **auth gate**: `useSession()` → blank while loading, `<AuthScreen/>` when signed out, `<TodayScreen/>` when signed in. No placeholder left — the real Today screen is live.
-- `src/components/ui/`, `src/features/auth/`, `src/features/activities/`, `src/features/today/`, `src/hooks/` — see below.
+- `src/components/ui/`, `src/features/auth/`, `src/features/activities/`, `src/features/today/`, `src/features/notifications/`, `src/hooks/` — see below.
+- `src/push/` — Web Push client (permission, subscribe, timezone capture). See the Notifications section.
 - `src/sw.ts` — service worker (see PWA note below).
 - `vite.config.ts`, `pwa-assets.config.ts` — PWA wiring.
 
@@ -105,9 +106,11 @@ The screen that replaced `App.tsx`'s old placeholder: a time-ordered timeline of
 
 ## `src/utils/supabase.ts` — the cloud edge
 
-Six lines: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)`. Needs those two env vars (`.env`, gitignored).
+Six lines: `createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)`. Needs those two env vars (`.env`, gitignored). Web Push adds a third, `VITE_VAPID_PUBLIC_KEY` (the VAPID public key — safe to ship; the private key lives in Supabase function secrets).
 
 **Behaviour to respect:** this client is the *only* path to the cloud, and per the architecture it must **never be read from in the UI critical path** — UI reads come from Dexie. Two background flows use it, both in `src/sync/` (see next section): **push** drains the queue → Supabase, **pull** reads Supabase → reconciles into Dexie. The pull reads the cloud but hydrates Dexie, not the render path, so the contract holds. Feature code mutates via `src/db/repo.ts` and reads via Dexie, never by calling `supabase` directly.
+
+**One documented exception:** `src/push/` writes `push_subscriptions` and `user_settings` **direct** to Supabase, bypassing Dexie/`syncQueue`. These are cloud-only, server-facing rows (the Edge Function reads them), acquired only while online, and never read from Dexie — so the offline-first write path doesn't apply. This is the *only* place feature code calls `supabase` for writes.
 
 ## Sync — `src/sync/`
 
@@ -128,7 +131,28 @@ Glossary: **push/flush** = Dexie→Supabase · **pull/hydrate** = Supabase→Dex
 - **Icon generation:** `@vite-pwa/assets-generator` `minimal-2023` preset (`pwa-assets.config.ts`) — one source SVG → all iOS/Android/favicon sizes.
 - **Edge-to-edge / safe areas:** `index.html` sets `viewport-fit=cover` (+ `apple-mobile-web-app-capable`, `theme-color #0f0f0f`). `viewport-fit=cover` is what makes `env(safe-area-inset-*)` report real values; `theme-color` tints the opaque status bar so, on a dark app, it reads as seamless. **Deliberately NOT using `apple-mobile-web-app-status-bar-style=black-translucent`** — on standalone iOS it shortens the usable viewport at the bottom (top-anchored layouts then show dead space below the tab bar); the opaque `#0f0f0f` bar looks identical here without the quirk. Consequence: any full-bleed or `fixed`/edge element must pad itself with `env(safe-area-inset-*)` (see the mobile header, `MobileTabBar`, and the FAB in `features/today/`) — a hardcoded top/bottom pad will be wrong per-device. Metas are read at launch, so the installed PWA must be re-added to the home screen to pick up changes.
 
-**`src/sw.ts` current state:** still essentially the vite-pwa template — precache + `cleanupOutdatedCaches` + a navigation fallback + a `SKIP_WAITING` message handler. The planned **`push` event listener and background-sync handlers are NOT here yet.** Add them here when Web Push / offline-flush land.
+**`src/sw.ts` current state:** the vite-pwa template (precache + `cleanupOutdatedCaches` + navigation fallback + `SKIP_WAITING`) **plus Web Push handlers**: `push` (shows the notification), `notificationclick` (focuses an open tab or opens `/` — Today; no router yet, so no per-activity deep link), and `pushsubscriptionchange` (silently re-subscribes; the app persists the new row on next open via `reconcileSubscription`). `src/sw.ts` is compiled by Vite, so `import.meta.env.VITE_VAPID_PUBLIC_KEY` is available there. The **background-sync handler is still NOT here** — `syncQueue` only drains while the app is alive (see `db/CONTEXT.md`).
+
+## Notifications — `src/push/` + `src/features/notifications/`
+
+Client half of the Web Push feature (server half: `supabase/` alarm — ADR 0003).
+
+- `push/subscribe.ts` — `enableNotifications(userId)` (permission from a user gesture →
+  `pushManager.subscribe` → upsert `push_subscriptions` direct), `disableNotifications`,
+  `reconcileSubscription` (no-prompt refresh on session-active), `currentPermission`,
+  `isSubscribed`.
+- `push/timezone.ts` — `captureTimezone(userId)`: writes the device IANA zone to
+  `user_settings` (the server can't fire a zoneless reminder without it).
+- `push/platform.ts` — `pushSupported`, `isIOS`, `isStandalone`, `needsInstallFirst` (iOS
+  only does Web Push once the PWA is installed to the home screen).
+- `push/ask.ts` — `shouldOfferAsk()`: gate for the contextual prompt.
+- `push/useReconcile.ts` — `useReconcileNotifications(userId)`, called beside `useSync` in
+  `App`'s signed-in subtree (same triggers: mount / online / foreground).
+- `features/notifications/NotificationAsk.tsx` — the contextual permission dialog, shown by
+  `TodayScreen` **after a reminder is created** (`NewActivityDialog`'s `onCreated` →
+  `shouldOfferAsk()`). Three shapes: iOS "add to home screen" guidance, the real ask, and a
+  "blocked" state. **This is the only entry point** — there's no settings screen yet, so no
+  toggle to re-enable once granted/blocked (deferred).
 
 ## Conventions
 

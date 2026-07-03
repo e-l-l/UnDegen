@@ -217,7 +217,7 @@ commit;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- NOT YET INCLUDED (open questions in CLAUDE.md):
---   - push_subscriptions  — Web Push subscription objects per user (server-side trigger)
+--   - push_subscriptions  — LANDED in 0003 (also user_settings, notification_log)
 --   - activities.exception_dates date[]  — skip a recurrence on a specific date
 -- Add via a later migration when those features land.
 -- ─────────────────────────────────────────────────────────────────────────────

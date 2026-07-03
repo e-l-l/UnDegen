@@ -16,7 +16,7 @@ type FieldErrors = {
 // All create-activity state/validation/submit, no JSX — mirrors useAuthForm.ts.
 // One hook backs both the mobile and desktop layouts so state survives a
 // resize across the lg breakpoint while the dialog is open.
-export function useNewActivityForm(userId: string, onCreated: () => void) {
+export function useNewActivityForm(userId: string, onCreated: (type: ActivityType) => void) {
   const [name, setName] = useState("")
   const [type, setType] = useState<ActivityType>("reminder")
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
@@ -75,7 +75,7 @@ export function useNewActivityForm(userId: string, onCreated: () => void) {
         goal_duration_mins: type === "long_task" && defaultMode === "goal" ? goalDurationMins : null,
       }
       await createActivity(userId, input)
-      onCreated()
+      onCreated(type)
     } catch (err) {
       setErrors({
         form: err instanceof Error ? err.message : "Something went wrong. Try again.",
