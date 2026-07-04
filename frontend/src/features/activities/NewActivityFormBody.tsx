@@ -47,7 +47,12 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
         <div>
           <ReminderTypeToggle value={form.reminderType} onChange={form.setReminderType} />
           {form.reminderType === "strict" ? (
-            <StrictTimeField value={form.strictTime} onChange={form.setStrictTime} />
+            <StrictTimeField
+              value={form.strictTime}
+              onChange={form.setStrictTime}
+              minTime={form.reminderMinTime}
+              error={form.errors.strictTime}
+            />
           ) : (
             <>
               <SoftWindowFields
@@ -56,6 +61,7 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
                 onChangeStart={form.setSoftStart}
                 onChangeEnd={form.setSoftEnd}
                 error={form.errors.softWindow}
+                minTime={form.reminderMinTime}
               />
               <div className="mt-3.5">
                 <SoftIntervalChips

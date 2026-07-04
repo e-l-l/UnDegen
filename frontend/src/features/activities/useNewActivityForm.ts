@@ -1,7 +1,7 @@
 import { useState } from "react"
 
 import { createActivity } from "@/db/repo"
-import { todayLocal } from "@/db/recurrence"
+import { defaultStartTimeLocal, hourAfterLocal, nowTimeLocal, todayLocal } from "@/db/recurrence"
 import type { Activity, ActivityType, ReminderType, TaskMode } from "@/db/types"
 
 type FieldErrors = {
@@ -23,9 +23,9 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
   const [recurrenceStart, setRecurrenceStart] = useState(todayLocal())
 
   const [reminderType, setReminderType] = useState<ReminderType>("strict")
-  const [strictTime, setStrictTime] = useState("09:00")
-  const [softStart, setSoftStart] = useState("08:00")
-  const [softEnd, setSoftEnd] = useState("20:00")
+  const [strictTime, setStrictTime] = useState(() => defaultStartTimeLocal())
+  const [softStart, setSoftStart] = useState(() => defaultStartTimeLocal())
+  const [softEnd, setSoftEnd] = useState(() => hourAfterLocal(defaultStartTimeLocal()))
   const [softIntervalMins, setSoftIntervalMins] = useState(60)
   const [softIntervalCustom, setSoftIntervalCustom] = useState(false)
 
@@ -39,16 +39,23 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
   const isStrict = type === "reminder" && reminderType === "strict"
   const isSoft = type === "reminder" && reminderType === "soft"
 
+  // A reminder that starts today can't fire earlier than now; a future start
+  // date lifts the floor entirely (undefined = no restriction). Shared by the
+  // strict time and both ends of the soft window.
+  const reminderMinTime = recurrenceStart === todayLocal() ? nowTimeLocal() : undefined
+
   function validate(): boolean {
     const next: FieldErrors = {}
     if (!name.trim()) next.name = "Required"
     if (recurrenceDays.length === 0) next.recurrenceDays = "Pick at least one day"
-    if (isStrict && !strictTime) {
-      next.strictTime = "Pick a time"
+    if (isStrict) {
+      if (!strictTime) next.strictTime = "Pick a time"
+      else if (reminderMinTime && strictTime < reminderMinTime) next.strictTime = "That time's already passed"
     }
     if (isSoft) {
       if (!softIntervalMins || softIntervalMins <= 0) next.softWindow = "Pick an interval"
       else if (softStart >= softEnd) next.softWindow = "Until must be after From"
+      else if (reminderMinTime && softStart < reminderMinTime) next.softWindow = "That window's already started"
     }
     if (type === "long_task" && defaultMode === "goal" && (!goalDurationMins || goalDurationMins <= 0)) {
       next.goalDuration = "Pick a duration"
@@ -99,6 +106,7 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
     setReminderType,
     strictTime,
     setStrictTime,
+    reminderMinTime,
     softStart,
     setSoftStart,
     softEnd,
