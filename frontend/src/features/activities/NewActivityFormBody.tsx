@@ -50,7 +50,7 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
             <StrictTimeField
               value={form.strictTime}
               onChange={form.setStrictTime}
-              minTime={form.strictMinTime}
+              minTime={form.reminderMinTime}
               error={form.errors.strictTime}
             />
           ) : (
@@ -61,6 +61,7 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
                 onChangeStart={form.setSoftStart}
                 onChangeEnd={form.setSoftEnd}
                 error={form.errors.softWindow}
+                minTime={form.reminderMinTime}
               />
               <div className="mt-3.5">
                 <SoftIntervalChips
