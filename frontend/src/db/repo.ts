@@ -179,6 +179,27 @@ export async function markReminder(
   return row
 }
 
+// Undo a reminder's completion for a date: delete its completion row so the
+// instance reverts to not-done (no "not_done" status exists — absence is the
+// state; "missed" stays derived, see ADR 0001). No-op if nothing's marked.
+// Leaves the day_activity in place (harmless empty override; dayView left-joins
+// it), rather than garbage-collecting an instance that may also hold sessions.
+export async function clearReminder(
+  userId: string,
+  date: string,
+  activityId: string
+): Promise<void> {
+  const day = await db.days.where("[user_id+date]").equals([userId, date]).first()
+  if (!day) return
+  const da = await db.day_activities
+    .where("[day_id+activity_id]")
+    .equals([day.id, activityId])
+    .first()
+  if (!da) return
+  const existing = await db.completions.where("day_activity_id").equals(da.id).first()
+  if (existing) await deleteRow("completions", existing.id)
+}
+
 // Add an existing activity to a date it doesn't recur on (source becomes 'manual').
 export function addManual(userId: string, date: string, activityId: string): Promise<DayActivity> {
   return ensureDayActivity(userId, date, activityId)

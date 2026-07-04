@@ -9,7 +9,7 @@ interface TimelineProps {
   earlier: ReminderBucket[]
   upNext: ReminderBucket[]
   nowLabel: string
-  onToggleDone: (activityId: string) => void
+  onToggleDone: (activityId: string, done: boolean) => void
 }
 
 // The one shared timeline body for both breakpoints — mobile/desktop only
@@ -20,16 +20,19 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
   nowRef
 ) {
   const rows = (buckets: ReminderBucket[]) =>
-    buckets.map(({ item, timeLabel }) => (
-      <ReminderRow
-        key={item.activity.id}
-        time={timeLabel}
-        title={item.activity.name}
-        Icon={iconForActivity(item.activity)}
-        done={item.completion?.status === "done"}
-        onToggle={() => onToggleDone(item.activity.id)}
-      />
-    ))
+    buckets.map(({ item, timeLabel }) => {
+      const done = item.completion?.status === "done"
+      return (
+        <ReminderRow
+          key={item.activity.id}
+          time={timeLabel}
+          title={item.activity.name}
+          Icon={iconForActivity(item.activity)}
+          done={done}
+          onToggle={() => onToggleDone(item.activity.id, done)}
+        />
+      )
+    })
 
   return (
     <>

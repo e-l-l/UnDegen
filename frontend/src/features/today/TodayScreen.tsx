@@ -3,7 +3,7 @@ import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { todayLocal } from "@/db/recurrence"
-import { completeWorkSession, markReminder, startWorkSession } from "@/db/repo"
+import { clearReminder, completeWorkSession, markReminder, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
 import { NewActivityDialog } from "@/features/activities/NewActivityDialog"
 import { NotificationAsk } from "@/features/notifications/NotificationAsk"
@@ -63,8 +63,10 @@ export function TodayScreen({ userId }: TodayScreenProps) {
     scrolledRef.current = true
   }, [data.loading])
 
-  const toggleDone = (activityId: string) => {
-    void markReminder(userId, todayLocal(), activityId, "done")
+  const toggleDone = (activityId: string, done: boolean) => {
+    void (done
+      ? clearReminder(userId, todayLocal(), activityId)
+      : markReminder(userId, todayLocal(), activityId, "done"))
   }
 
   const startSession = (activityId: string) => {

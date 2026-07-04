@@ -14,6 +14,8 @@ interface ReminderRowProps {
 // time has passed without being marked done still renders at full opacity
 // with a tappable empty circle — root CLAUDE.md bans punishing "missed"
 // states, so a late reminder stays actionable rather than styled as a failure.
+// The toggle stays clickable when done so an accidental completion can be
+// undone (onToggle clears the completion — see TodayScreen.toggleDone).
 export function ReminderRow({ time, title, Icon, done, onToggle }: ReminderRowProps) {
   return (
     <div
@@ -39,8 +41,7 @@ export function ReminderRow({ time, title, Icon, done, onToggle }: ReminderRowPr
       <button
         type="button"
         onClick={onToggle}
-        disabled={done}
-        aria-label={done ? `${title} — done` : `Mark ${title} done`}
+        aria-label={done ? `Mark ${title} not done` : `Mark ${title} done`}
         className={cn(
           "flex size-[22px] shrink-0 items-center justify-center rounded-full",
           done ? "bg-pink" : "border-[1.6px] border-[#383838]"
