@@ -37,7 +37,7 @@ function Calendar({
         month: "flex flex-col gap-3",
         month_caption: "flex items-center justify-center pt-1 pb-2 relative",
         caption_label: "text-[13px] font-medium text-ink",
-        nav: "flex items-center justify-between absolute inset-x-0 top-0",
+        nav: "flex items-center justify-between absolute inset-0",
         button_previous:
           "size-7 flex items-center justify-center rounded-md text-ink-dim hover:text-ink hover:bg-surface disabled:opacity-40 disabled:pointer-events-none",
         button_next:
