@@ -166,11 +166,16 @@ type TimePickerProps = {
   value: string
   onChange: (value: string) => void
   className?: string
+  // Lower bound as 'HH:MM' (24hr). When set, the quick-pick list hides any
+  // earlier slot; typed/stepped values below it are snapped up to it on blur.
+  // Used to stop scheduling a reminder in the past when it starts today.
+  minTime?: string
 }
 
-export function TimePicker({ value, onChange, className }: TimePickerProps) {
+export function TimePicker({ value, onChange, className, minTime }: TimePickerProps) {
   const { h12, minute, period } = parseTime(value)
   const [open, setOpen] = useState(false)
+  const quickTimes = minTime ? QUICK_TIMES.filter((t) => t >= minTime) : QUICK_TIMES
   const hourRef = useRef<HTMLInputElement>(null)
   const minuteRef = useRef<HTMLInputElement>(null)
   const periodRef = useRef<HTMLButtonElement>(null)
@@ -187,6 +192,13 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
         "focus-within:border-[#3a3a3a] focus-within:ring-[3px] focus-within:ring-ring/20",
         className
       )}
+      // Snap a below-minimum time up once focus fully leaves the control (not
+      // while tabbing between segments) — keeps typed/stepped input honest.
+      onBlur={(e) => {
+        if (minTime && value < minTime && !e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          onChange(minTime)
+        }
+      }}
     >
       <TimeSegment
         value={h12}
@@ -223,7 +235,7 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
         </PopoverTrigger>
         <PopoverContent align="end" className="w-36 p-1">
           <ScrollArea className="h-64">
-            {QUICK_TIMES.map((t) => {
+            {quickTimes.map((t) => {
               const selected = t === value
               return (
                 <button

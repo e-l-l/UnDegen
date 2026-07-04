@@ -47,7 +47,12 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
         <div>
           <ReminderTypeToggle value={form.reminderType} onChange={form.setReminderType} />
           {form.reminderType === "strict" ? (
-            <StrictTimeField value={form.strictTime} onChange={form.setStrictTime} />
+            <StrictTimeField
+              value={form.strictTime}
+              onChange={form.setStrictTime}
+              minTime={form.strictMinTime}
+              error={form.errors.strictTime}
+            />
           ) : (
             <>
               <SoftWindowFields

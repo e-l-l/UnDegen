@@ -1,7 +1,7 @@
 import { useState } from "react"
 
 import { createActivity } from "@/db/repo"
-import { todayLocal } from "@/db/recurrence"
+import { nextHourLocal, nowTimeLocal, todayLocal } from "@/db/recurrence"
 import type { Activity, ActivityType, ReminderType, TaskMode } from "@/db/types"
 
 type FieldErrors = {
@@ -23,7 +23,7 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
   const [recurrenceStart, setRecurrenceStart] = useState(todayLocal())
 
   const [reminderType, setReminderType] = useState<ReminderType>("strict")
-  const [strictTime, setStrictTime] = useState("09:00")
+  const [strictTime, setStrictTime] = useState(nextHourLocal())
   const [softStart, setSoftStart] = useState("08:00")
   const [softEnd, setSoftEnd] = useState("20:00")
   const [softIntervalMins, setSoftIntervalMins] = useState(60)
@@ -39,12 +39,17 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
   const isStrict = type === "reminder" && reminderType === "strict"
   const isSoft = type === "reminder" && reminderType === "soft"
 
+  // A reminder that starts today can't fire earlier than now; a future start
+  // date lifts the floor entirely (undefined = no restriction).
+  const strictMinTime = recurrenceStart === todayLocal() ? nowTimeLocal() : undefined
+
   function validate(): boolean {
     const next: FieldErrors = {}
     if (!name.trim()) next.name = "Required"
     if (recurrenceDays.length === 0) next.recurrenceDays = "Pick at least one day"
-    if (isStrict && !strictTime) {
-      next.strictTime = "Pick a time"
+    if (isStrict) {
+      if (!strictTime) next.strictTime = "Pick a time"
+      else if (strictMinTime && strictTime < strictMinTime) next.strictTime = "That time's already passed"
     }
     if (isSoft) {
       if (!softIntervalMins || softIntervalMins <= 0) next.softWindow = "Pick an interval"
@@ -99,6 +104,7 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
     setReminderType,
     strictTime,
     setStrictTime,
+    strictMinTime,
     softStart,
     setSoftStart,
     softEnd,
