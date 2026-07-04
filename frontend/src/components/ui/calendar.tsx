@@ -3,6 +3,24 @@ import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 
+// Thin line chevron for the month nav — react-day-picker's default glyph
+// renders as a heavy black arrow that fights the calm/minimal aesthetic.
+function Chevron({ orientation }: { orientation?: "left" | "right" | "up" | "down" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      {orientation === "right" ? <path d="M9 18l6-6-6-6" /> : <path d="M15 18l-6-6 6-6" />}
+    </svg>
+  )
+}
+
 // Wraps react-day-picker. Selected day = grayscale elevated fill (never pink,
 // per the hard "pink is CTA-only" rule); "today" gets a ring, not a fill, so
 // it never competes with an actual selection.
@@ -37,6 +55,7 @@ function Calendar({
         disabled: "[&>button]:text-ink-faint/40 [&>button]:pointer-events-none",
         ...classNames,
       }}
+      components={{ Chevron }}
       {...props}
     />
   )

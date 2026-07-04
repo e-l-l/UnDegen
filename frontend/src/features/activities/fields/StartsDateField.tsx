@@ -19,6 +19,7 @@ type StartsDateFieldProps = {
 export function StartsDateField({ value, onChange }: StartsDateFieldProps) {
   const isToday = value === todayLocal()
   const short = formatShort(value)
+  const today = parseLocalDate(todayLocal())
 
   return (
     <div>
@@ -35,7 +36,13 @@ export function StartsDateField({ value, onChange }: StartsDateFieldProps) {
           </button>
         </PopoverTrigger>
         <PopoverContent align="start">
-          <Calendar mode="single" selected={parseLocalDate(value)} onSelect={(d) => d && onChange(todayLocal(d))} />
+          <Calendar
+            mode="single"
+            selected={parseLocalDate(value)}
+            onSelect={(d) => d && onChange(todayLocal(d))}
+            disabled={{ before: today }}
+            startMonth={today}
+          />
         </PopoverContent>
       </Popover>
     </div>
