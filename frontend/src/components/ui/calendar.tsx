@@ -43,14 +43,30 @@ function Calendar({
   // animation while the new month slides in underneath.
   const [outgoing, setOutgoing] = React.useState<{ month: Date } | null>(null)
   const isAnimating = React.useRef(false)
+  const outgoingFallbackTimeout = React.useRef<number | null>(null)
   const dir = outgoing ? (outgoing.month.getTime() < month.getTime() ? 1 : -1) : null
 
   React.useEffect(() => {
     if (monthProp) setMonth(startOfMonth(monthProp))
   }, [monthProp])
 
-  // Trackpad two-finger scroll and mobile swipe both change the visible
-  // month — react-day-picker only exposes this via arrow-button clicks.
+  React.useEffect(() => {
+    return () => {
+      if (outgoingFallbackTimeout.current !== null) window.clearTimeout(outgoingFallbackTimeout.current)
+    }
+  }, [])
+
+  function finishOutgoing() {
+    if (outgoingFallbackTimeout.current !== null) {
+      window.clearTimeout(outgoingFallbackTimeout.current)
+      outgoingFallbackTimeout.current = null
+    }
+    setOutgoing(null)
+    isAnimating.current = false
+  }
+
+  // Mobile swipe changes the visible month — react-day-picker only exposes
+  // this via arrow-button clicks.
   function changeMonth(delta: number) {
     if (isAnimating.current) return
     const next = clampMonth(addMonths(month, delta), startMonth, endMonth)
@@ -59,37 +75,10 @@ function Calendar({
     setOutgoing({ month })
     setMonth(next)
     onMonthChangeProp?.(next)
-  }
-
-  function handleOutgoingAnimationEnd() {
-    setOutgoing(null)
-    isAnimating.current = false
-  }
-
-  const wheelAccum = React.useRef(0)
-  const wheelLocked = React.useRef(false)
-  const wheelCooldownTimeout = React.useRef<number | null>(null)
-  const WHEEL_THRESHOLD = 60
-  const WHEEL_COOLDOWN_MS = 350
-
-  React.useEffect(() => {
-    return () => {
-      if (wheelCooldownTimeout.current !== null) window.clearTimeout(wheelCooldownTimeout.current)
-    }
-  }, [])
-
-  function handleWheel(e: React.WheelEvent) {
-    if (wheelLocked.current) return
-    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-    wheelAccum.current += delta
-    if (Math.abs(wheelAccum.current) > WHEEL_THRESHOLD) {
-      changeMonth(wheelAccum.current > 0 ? 1 : -1)
-      wheelAccum.current = 0
-      wheelLocked.current = true
-      wheelCooldownTimeout.current = window.setTimeout(() => {
-        wheelLocked.current = false
-      }, WHEEL_COOLDOWN_MS)
-    }
+    // Safety net: if the CSS animation never fires an "animationend" (e.g.
+    // prefers-reduced-motion drops the animation, or the event gets missed),
+    // this still releases the lock instead of leaving it stuck forever.
+    outgoingFallbackTimeout.current = window.setTimeout(finishOutgoing, TRANSITION_MS + 50)
   }
 
   const touchStart = React.useRef<{ x: number; y: number } | null>(null)
@@ -151,7 +140,7 @@ function Calendar({
   }
 
   return (
-    <div onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="relative overflow-hidden">
         {outgoing && (
           <div
@@ -159,7 +148,7 @@ function Calendar({
             aria-hidden
             className={cn("absolute inset-0 z-10 bg-inherit", "animate-out", dir === 1 ? "slide-out-to-left" : "slide-out-to-right")}
             style={{ animationDuration: `${TRANSITION_MS}ms`, animationFillMode: "forwards" }}
-            onAnimationEnd={handleOutgoingAnimationEnd}
+            onAnimationEnd={finishOutgoing}
           >
             {renderPicker(outgoing.month, noop, "pointer-events-none")}
           </div>
