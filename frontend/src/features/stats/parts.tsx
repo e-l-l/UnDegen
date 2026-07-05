@@ -212,17 +212,24 @@ export function MostAvoided({
 }
 
 // ── completion row (reminder detail log) — peer of SessionRow ─────────────────
+// `skipped` (the stored value behind a user's "Missed it") is presented
+// identically to derived `missed` — one "Missed" vocabulary end-to-end. The
+// data stays honest (status is still `skipped`); this is display-only. The
+// shared `MISSED_*` constants keep the two keys in lockstep (still an exhaustive
+// Record — split them again if a status ever needs its own look).
+const MISSED_CELL = "bg-transparent shadow-[inset_0_0_0_1.4px_#2A2A2A]"
+const MISSED_TEXT = "text-[#6E6E6E]"
 const STATUS_CELL: Record<CompletionRecord["status"], string> = {
   done: "bg-[#CACACA]",
-  skipped: "bg-transparent shadow-[inset_0_0_0_1.4px_#3A3A3A]",
-  missed: "bg-transparent shadow-[inset_0_0_0_1.4px_#2A2A2A]",
+  skipped: MISSED_CELL,
+  missed: MISSED_CELL,
 }
 const STATUS_TEXT: Record<CompletionRecord["status"], string> = {
   done: "text-[#D6D6D6]",
-  skipped: "text-[#8A8A8A]",
-  missed: "text-[#6E6E6E]",
+  skipped: MISSED_TEXT,
+  missed: MISSED_TEXT,
 }
-const STATUS_LABEL: Record<CompletionRecord["status"], string> = { done: "Done", skipped: "Skipped", missed: "Missed" }
+const STATUS_LABEL: Record<CompletionRecord["status"], string> = { done: "Done", skipped: "Missed", missed: "Missed" }
 
 export function CompletionRow({ record }: { record: CompletionRecord }) {
   return (

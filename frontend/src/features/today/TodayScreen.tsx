@@ -51,6 +51,15 @@ export function TodayScreen({ userId }: TodayScreenProps) {
       : markReminder(userId, today, activityId, "done"))
   }
 
+  // "Missed it" — a deliberate dismissal stored as `skipped` (ADR 0001: derived
+  // `missed` is never written; this is a real skip override). It silences the
+  // occurrence's notifications; Undo clears the completion.
+  const toggleMissed = (activityId: string, missed: boolean) => {
+    void (missed
+      ? clearReminder(userId, today, activityId)
+      : markReminder(userId, today, activityId, "skipped"))
+  }
+
   const startSession = (activityId: string) => {
     void startWorkSession(userId, today, activityId)
   }
@@ -78,6 +87,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             upNext={data.upNext}
             nowLabel={data.nowLabel}
             onToggleDone={toggleDone}
+            onToggleMissed={toggleMissed}
             userId={userId}
             date={today}
           />
@@ -129,6 +139,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
               upNext={data.upNext}
               nowLabel={data.nowLabel}
               onToggleDone={toggleDone}
+              onToggleMissed={toggleMissed}
               userId={userId}
               date={today}
             />

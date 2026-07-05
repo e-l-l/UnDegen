@@ -62,8 +62,11 @@ Server-side reminders. Full rationale in **ADR 0003**; the shape:
 - **Timezone is load-bearing** and lives in `user_settings` (one IANA zone per user). Without
   it a user gets no notifications — a zoneless `strict_time` can't be placed. Captured
   client-side; last-device-wins.
-- **Soft reminders are completion-aware**: nudges stop once the occurrence is done/skipped
-  today (the function left-joins `completions`). Strict fires once.
+- **Firing is completion-aware for both types**: a `done`/`skipped` completion for the
+  occurrence suppresses its send (the function left-joins `completions` over all due items).
+  Soft stops its remaining nudges; strict is pre-empted before its single fire. `skipped` is
+  written by the Today "Missed it" action (see root `CLAUDE.md`). Best-effort — reads Supabase,
+  so an offline/unsynced mark near fire-time may still let one through.
 - **Dead subscriptions self-clean**: a `410 Gone`/`404` from the push service deletes that
   `push_subscriptions` row.
 

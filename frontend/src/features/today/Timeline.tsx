@@ -10,6 +10,7 @@ interface TimelineProps {
   upNext: ReminderBucket[]
   nowLabel: string
   onToggleDone: (activityId: string, done: boolean) => void
+  onToggleMissed: (activityId: string, missed: boolean) => void
   userId: string
   date: string
 }
@@ -18,12 +19,13 @@ interface TimelineProps {
 // differ in the surrounding chrome (header, nav, rail), not in how rows
 // render, so unlike the header/nav blocks this isn't duplicated per lg:.
 export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timeline(
-  { earlier, upNext, nowLabel, onToggleDone, userId, date },
+  { earlier, upNext, nowLabel, onToggleDone, onToggleMissed, userId, date },
   nowRef
 ) {
   const rows = (buckets: ReminderBucket[]) =>
     buckets.map(({ item, timeLabel }) => {
       const done = item.completion?.status === "done"
+      const missed = item.completion?.status === "skipped"
       return (
         <ReminderRow
           key={item.activity.id}
@@ -31,7 +33,9 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           title={item.activity.name}
           Icon={iconForActivity(item.activity)}
           done={done}
+          missed={missed}
           onToggle={() => onToggleDone(item.activity.id, done)}
+          onToggleMissed={() => onToggleMissed(item.activity.id, missed)}
           activity={item.activity}
           date={date}
           userId={userId}

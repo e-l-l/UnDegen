@@ -78,7 +78,11 @@ export function useTodayData(userId: string): TodayData {
     upNext.sort((a, b) => a.anchorMinutes - b.anchorMinutes)
 
     const doneCount = reminders.filter((i) => i.completion?.status === "done").length
-    const toGoCount = reminders.length - doneCount
+    // A "Missed it" (skipped) occurrence is resolved, not outstanding — exclude it
+    // from "to go" (so done + toGo need not sum to the total; dismissed ones are neither).
+    const toGoCount = reminders.filter(
+      (i) => i.completion?.status !== "done" && i.completion?.status !== "skipped"
+    ).length
 
     const weekday = now.toLocaleDateString(undefined, { weekday: "long" })
     const monthDay = now.toLocaleDateString(undefined, { month: "short", day: "numeric" })

@@ -21,6 +21,12 @@ interface TaskActionsProps {
   activity: Activity
   date: string
   userId: string
+  // "Missed it" toggle — reminders only. When omitted (e.g. long_tasks, which
+  // have no completion row and get no notifications) the item isn't rendered.
+  // `missed` reflects whether this occurrence already carries a `skipped`
+  // completion; the label flips to "Undo" when true. See the "Missed it" plan.
+  missed?: boolean
+  onToggleMissed?: () => void
   // Render the occurrence's row/card and drop `kebab` where the ⋮ trigger should
   // sit (it hides itself on mobile). The returned element is also the long-press /
   // right-click target for the context menu, so it must be a DOM element (asChild).
@@ -31,11 +37,13 @@ interface TaskActionsProps {
 //   • desktop → a hover-revealed ⋮ kebab (DropdownMenu)
 //   • mobile  → press-and-hold the row/card (Radix ContextMenu = native long-press
 //     on touch; also right-click on desktop as a harmless bonus)
-// Delete is the only action for now; it opens the this-day / entire-activity
-// choice dialog. Add more per-task actions (edit, skip…) to both menus here.
-export function TaskActions({ activity, date, userId, children }: TaskActionsProps) {
+// Two actions: "Missed it" (reminders only — stores `skipped`, silences the
+// occurrence's notifications; toggles to "Undo") and Delete (opens the this-day /
+// entire-activity choice dialog). Add further per-task actions (edit…) here.
+export function TaskActions({ activity, date, userId, missed, onToggleMissed, children }: TaskActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const openDialog = () => setDialogOpen(true)
+  const missedLabel = missed ? "Undo" : "Missed it"
 
   const kebab = (
     <DropdownMenu>
@@ -50,6 +58,7 @@ export function TaskActions({ activity, date, userId, children }: TaskActionsPro
         <MoreVertical className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">
+        {onToggleMissed && <DropdownMenuItem onSelect={onToggleMissed}>{missedLabel}</DropdownMenuItem>}
         <DropdownMenuItem variant="destructive" onSelect={openDialog}>
           Delete…
         </DropdownMenuItem>
@@ -62,6 +71,7 @@ export function TaskActions({ activity, date, userId, children }: TaskActionsPro
       <ContextMenu>
         <ContextMenuTrigger asChild>{children(kebab)}</ContextMenuTrigger>
         <ContextMenuContent className="min-w-36">
+          {onToggleMissed && <ContextMenuItem onSelect={onToggleMissed}>{missedLabel}</ContextMenuItem>}
           <ContextMenuItem variant="destructive" onSelect={openDialog}>
             Delete…
           </ContextMenuItem>

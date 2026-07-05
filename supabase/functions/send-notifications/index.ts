@@ -112,21 +112,16 @@ Deno.serve(async (req: Request) => {
   }
   if (!due.length) return json({ sent: 0 })
 
-  // 5. Completion-aware stop for SOFT reminders: silence remaining nudges once the
-  //    occurrence is done/skipped today. (Strict fires once regardless.)
-  const completed = await loadCompletedSet(
-    admin,
-    due.filter((d) => d.activity.reminder_type === "soft")
-  )
+  // 5. Completion-aware stop: silence an occurrence once it's done/skipped today.
+  //    Applies to both types — soft stops its remaining nudges, strict is
+  //    pre-empted before its single fire. ("Missed it" writes `skipped`.)
+  const completed = await loadCompletedSet(admin, due)
 
   // 6. Claim + send, slot by slot.
   let sent = 0
   let skipped = 0
   for (const d of due) {
-    if (
-      d.activity.reminder_type === "soft" &&
-      completed.has(`${d.activity.id}|${d.localDate}`)
-    ) {
+    if (completed.has(`${d.activity.id}|${d.localDate}`)) {
       skipped++
       continue
     }
@@ -207,15 +202,15 @@ async function sendToSubs(
   return { delivered, error }
 }
 
-// For each soft-due (activity, localDate), is the occurrence already done/skipped?
+// For each due (activity, localDate), is the occurrence already done/skipped?
 // Resolve via days → day_activities → completions in batch reads.
-async function loadCompletedSet(admin: SupabaseClient, softDue: Due[]): Promise<Set<string>> {
+async function loadCompletedSet(admin: SupabaseClient, due: Due[]): Promise<Set<string>> {
   const done = new Set<string>()
-  if (!softDue.length) return done
+  if (!due.length) return done
 
-  const userIds = [...new Set(softDue.map((d) => d.activity.user_id))]
-  const dates = [...new Set(softDue.map((d) => d.localDate))]
-  const activityIds = [...new Set(softDue.map((d) => d.activity.id))]
+  const userIds = [...new Set(due.map((d) => d.activity.user_id))]
+  const dates = [...new Set(due.map((d) => d.localDate))]
+  const activityIds = [...new Set(due.map((d) => d.activity.id))]
 
   const daysResp = await admin
     .from("days")
