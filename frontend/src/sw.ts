@@ -53,15 +53,16 @@ self.addEventListener('push', (event) => {
     tag: payload.tag,
     icon: '/pwa-192x192.png',
     badge: '/pwa-64x64.png',
-    data: { url: payload.url ?? '/' },
+    data: { url: payload.url ?? '/today' },
   }))
 })
 
-// Tapping a notification focuses an open tab, else opens the app at Today (root).
-// No router yet, so there's no per-activity deep link.
+// Tapping a notification focuses an open tab, else opens the app at /today.
+// react-router (declarative, App.tsx) now owns paths, so the Edge Function can
+// pass a deeper `url` (e.g. /stats/:id) when a per-activity deep link is wanted.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/'
+  const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/today'
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const client of windows) {

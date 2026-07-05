@@ -1,5 +1,5 @@
 - Day switcher on today view, to see other days - think google calendar like
 - in stats, a widget which shows u aggregated data over last week, 1 month, 3 month, 6 month, 12 month -- on the most active zones of the day - figure out how long tasks and reminders contribute
 - implement notifications
-- delete option on a reminder
 - u dont HAVE to opt to repeat, allow 1 time
+- random mode reminder

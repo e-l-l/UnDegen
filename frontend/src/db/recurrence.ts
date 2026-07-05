@@ -55,11 +55,13 @@ export function hourAfterLocal(time: string): string {
 // An archived activity produces nothing; a date in exception_dates is a
 // single-occurrence removal ("delete this day only") — the rule stands but
 // that one date is skipped. (?? [] guards rows created before the column.)
-export function recursOn(activity: Activity, date: string): boolean {
+// `weekday` is an optional precomputed weekdayOf(date) — pass it from a hot loop
+// that already knows the weekday to skip re-parsing the date string.
+export function recursOn(activity: Activity, date: string, weekday: number = weekdayOf(date)): boolean {
   return (
     !activity.archived &&
     activity.recurrence_start <= date &&
-    activity.recurrence_days.includes(weekdayOf(date)) &&
+    activity.recurrence_days.includes(weekday) &&
     !(activity.exception_dates ?? []).includes(date)
   )
 }

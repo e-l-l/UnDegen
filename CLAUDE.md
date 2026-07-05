@@ -8,7 +8,7 @@ Project context for Claude Code. Read this before touching anything.
 
 **Undegen** ("un-degenerate") — a recurring-activity accountability app. Not a todo app. Specifically for the things you keep choosing to avoid: gym, meds, deep work, laundry. The app's premise is that you have an avoidance problem, not an organisation problem.
 
-**Tone:** self-aware, dry, honest. No gamification, no confetti, no streaks as the hero metric, no punishing "missed" states. The UI reflects this — minimal, dark, calm.
+**Tone:** self-aware, dry, honest. No gamification, no confetti, no streaks as the hero metric, no punishing "missed" states. The UI reflects this — minimal, dark, calm. **One scoped exception:** the **Stats** surface roasts the *gap* (dry/sarcastic missed-state copy) — see the Key Decisions row. It targets the not-done, never the user, never needles a good week, and stays contained to Stats; everywhere else (especially Today) missed states stay non-punishing.
 
 ---
 
@@ -156,10 +156,12 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
 | Streak calculation | Derived on read | Computed from `completions`; not stored |
 | Missed detection | Derived on read, never written | No cron flip, no stored `missed` status; view computes it (`frontend/src/db/`: `recurrence.ts`, `dayView.ts`, `repo.ts`). ADR 0001 |
+| Stats roast (tone) | Sarcastic missed-state copy, **Stats surface only** | The honest-mirror motivational engine. Overrides the global "no punishing missed states" rule, scoped to Stats. Targets the *gap* (not the user), never needles a good week; a great week gets a plain nod. Lives in `frontend/src/features/stats/copy.ts` (threshold-driven), not in JSX. Contained — Today etc. stay non-punishing |
 | Notification firing | Poll-and-compute, server-side | `pg_cron` (1/min) → `send-notifications` Edge Function derives who's due now from `activities` + tz; no stored schedule. Claim-then-send via `notification_log` (at-most-once). ADR 0003 |
 | Timezone | Per-user IANA in `user_settings` | Needed to place zoneless `strict_time`; last-device-wins; DST-safe via `AT TIME ZONE`. Not per-device/per-activity. ADR 0003 |
 | Notification writes | Direct to Supabase | `push_subscriptions`/`user_settings` bypass Dexie/`syncQueue` — cloud-only, online-only, never read from Dexie. The one write exception |
 | Activity icons | Frontend string map | No icon/emoji column in DB; icon derived from `type` + `name` on the FE |
+| Navigation / routing | react-router v7 (declarative `BrowserRouter`) | Introduced for the Stats page. Routes `/today`, `/stats`, `/stats/:activityId`, catch-all → `/today`. Screens own their chrome (no shared layout route — Today's desktop rail differs from Stats'). SW notification-click → `/today`; `frontend/vercel.json` SPA rewrite so deep links don't 404. **Stats is built end-to-end** — UI + data layer, live Dexie data (`frontend/src/features/stats/` + `frontend/src/db/stats.ts`, see `frontend/CONTEXT.md`). `recharts` v3 installed (first usage, `FocusTrend` only; heatmap/flake hand-rolled) |
 | Package manager | npm | Solo project; familiarity over marginal speed gains |
 
 ---

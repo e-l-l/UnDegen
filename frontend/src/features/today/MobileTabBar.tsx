@@ -1,28 +1,41 @@
 import { BarChart3, Disc2, List } from "lucide-react"
+import { useLocation, useNavigate } from "react-router"
 
 import { cn } from "@/lib/utils"
 
 // Mobile keeps a Focus tab (no side rail to surface long tasks on this form
 // factor) — desktop drops it in favor of the Long-tasks rail. See root
-// CLAUDE.md's nav divergence note. Focus/Stats are visual-only stubs: no
-// router exists yet and only Today is built. You tab hidden until specced.
+// CLAUDE.md's nav divergence note. Today and Stats are real routes now; Focus
+// is still an unrouted stub (no Focus screen exists yet) and stays inert. You
+// tab hidden until specced.
 const TABS = [
-  { label: "Today", Icon: List, active: true },
-  { label: "Focus", Icon: Disc2, active: false },
-  { label: "Stats", Icon: BarChart3, active: false },
+  { label: "Today", Icon: List, to: "/today" },
+  { label: "Focus", Icon: Disc2, to: null },
+  { label: "Stats", Icon: BarChart3, to: "/stats" },
 ] as const
 
 export function MobileTabBar() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   return (
     <div className="flex shrink-0 border-t border-surface-raised bg-background px-4.5 pt-2.5 pb-[calc(env(safe-area-inset-bottom)_+_0.625rem)]">
-      {TABS.map(({ label, Icon, active }) => (
-        <div key={label} className="flex flex-1 flex-col items-center gap-1.25">
-          <Icon className={cn("size-5.5", active ? "text-pink" : "text-ink-faint")} strokeWidth={1.6} />
-          <span className={cn("text-[10.5px] font-medium", active ? "text-pink" : "text-ink-faint")}>
-            {label}
-          </span>
-        </div>
-      ))}
+      {TABS.map(({ label, Icon, to }) => {
+        const active = to != null && (pathname === to || pathname.startsWith(`${to}/`))
+        return (
+          <button
+            key={label}
+            type="button"
+            disabled={to == null}
+            onClick={() => to && navigate(to)}
+            className="flex flex-1 flex-col items-center gap-1.25 disabled:cursor-default"
+          >
+            <Icon className={cn("size-5.5", active ? "text-pink" : "text-ink-faint")} strokeWidth={1.6} />
+            <span className={cn("text-[10.5px] font-medium", active ? "text-pink" : "text-ink-faint")}>
+              {label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
