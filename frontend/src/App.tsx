@@ -5,6 +5,7 @@ import { StatsDetailScreen } from "@/features/stats/StatsDetailScreen"
 import { StatsScreen } from "@/features/stats/StatsScreen"
 import { FocusScreen } from "@/features/today/FocusScreen"
 import { TodayScreen } from "@/features/today/TodayScreen"
+import { YouScreen } from "@/features/you/YouScreen"
 import { useSession } from "@/hooks/useSession"
 import { useReconcileNotifications } from "@/push/useReconcile"
 import { useSync } from "@/sync/useSync"
@@ -26,6 +27,7 @@ function SignedInApp({ userId }: { userId: string }) {
         <Route path="/focus" element={<FocusScreen userId={userId} />} />
         <Route path="/stats" element={<StatsScreen userId={userId} />} />
         <Route path="/stats/:activityId" element={<StatsDetailScreen userId={userId} />} />
+        <Route path="/you" element={<YouScreen userId={userId} />} />
         <Route path="*" element={<Navigate to="/today" replace />} />
       </Routes>
       <PWABadge />

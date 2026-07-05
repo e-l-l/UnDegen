@@ -1,16 +1,16 @@
-import { BarChart3, Disc2, List } from "lucide-react"
+import { BarChart3, Disc2, List, User } from "lucide-react"
 import { useLocation, useNavigate } from "react-router"
 
 import { cn } from "@/lib/utils"
 
 // Mobile keeps a Focus tab (no side rail to surface long tasks on this form
 // factor) — desktop drops it in favor of the Long-tasks rail. See root
-// CLAUDE.md's nav divergence note. Today, Focus and Stats are all real routes
-// now (Focus → FocusScreen, mobile-only). You tab hidden until specced.
+// CLAUDE.md's nav divergence note. Today, Focus, Stats and You are all real routes.
 const TABS = [
   { label: "Today", Icon: List, to: "/today" },
   { label: "Focus", Icon: Disc2, to: "/focus" },
   { label: "Stats", Icon: BarChart3, to: "/stats" },
+  { label: "You", Icon: User, to: "/you" },
 ] as const
 
 export function MobileTabBar() {

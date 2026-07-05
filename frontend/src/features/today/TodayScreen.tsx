@@ -9,7 +9,6 @@ import { DesktopIsland } from "./DesktopIsland"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
 import { NewActivityFlow } from "./NewActivityFlow"
-import { SignOutLink } from "./SignOutLink"
 import { Timeline } from "./Timeline"
 import { useTodayData } from "./useTodayData"
 
@@ -91,7 +90,6 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             userId={userId}
             date={today}
           />
-          <SignOutLink />
         </div>
 
         <MobileTabBar />
@@ -160,7 +158,6 @@ export function TodayScreen({ userId }: TodayScreenProps) {
                 />
               ))}
             </div>
-            <SignOutLink />
           </div>
         </div>
       </div>

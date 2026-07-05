@@ -11,7 +11,6 @@ import type { WorkSession } from "@/db/types"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
 import { NewActivityFlow } from "./NewActivityFlow"
-import { SignOutLink } from "./SignOutLink"
 
 interface FocusScreenProps {
   userId: string
@@ -96,7 +95,6 @@ export function FocusScreen({ userId }: FocusScreenProps) {
               ))}
             </div>
           )}
-          <SignOutLink />
         </div>
 
         <MobileTabBar />

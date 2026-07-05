@@ -1,4 +1,4 @@
-import { BarChart3, List } from "lucide-react"
+import { BarChart3, List, User } from "lucide-react"
 import { useLocation, useNavigate } from "react-router"
 
 import { cn } from "@/lib/utils"
@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils"
 // Desktop drops the mobile Focus tab — long tasks/focus sessions already have
 // a home in the Long-tasks rail on this form factor, so a separate Focus
 // destination would be redundant here (mobile has no side rail, so it keeps
-// its own Focus tab). You tab hidden until specced.
+// its own Focus tab). You is a real destination on both form factors.
 const SEGMENTS = [
   { label: "Today", Icon: List, to: "/today" },
   { label: "Stats", Icon: BarChart3, to: "/stats" },
+  { label: "You", Icon: User, to: "/you" },
 ] as const
 
 export function DesktopIsland() {
