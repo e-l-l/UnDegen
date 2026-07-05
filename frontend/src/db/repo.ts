@@ -10,6 +10,7 @@ import type {
   Day,
   DayActivity,
   DayActivitySource,
+  NewActivityInput,
   SyncOp,
   TableName,
   WorkSession,
@@ -111,11 +112,11 @@ export async function nextActivityPosition(userId: string): Promise<number> {
 // racing an online write) can't read the same max position twice.
 export async function createActivity(
   userId: string,
-  input: Omit<Activity, "id" | "user_id" | "created_at" | "updated_at" | "position" | "archived">
+  input: NewActivityInput
 ): Promise<Activity> {
   return db.transaction("rw", db.activities, db.syncQueue, async () => {
     const position = await nextActivityPosition(userId)
-    return newActivity(userId, { ...input, position, archived: false })
+    return newActivity(userId, { ...input, position, archived: false, exception_dates: [] })
   })
 }
 
@@ -179,6 +180,20 @@ export async function markReminder(
   return row
 }
 
+// Locate an already-instantiated day_activity for (user, date, activity), or
+// undefined if this occurrence has no override row yet. The two-step walk
+// (day by [user_id+date], then day_activity by [day_id+activity_id]) is shared
+// by clearReminder and removeOccurrence.
+async function findDayActivity(
+  userId: string,
+  date: string,
+  activityId: string
+): Promise<DayActivity | undefined> {
+  const day = await db.days.where("[user_id+date]").equals([userId, date]).first()
+  if (!day) return undefined
+  return db.day_activities.where("[day_id+activity_id]").equals([day.id, activityId]).first()
+}
+
 // Undo a reminder's completion for a date: delete its completion row so the
 // instance reverts to not-done (no "not_done" status exists — absence is the
 // state; "missed" stays derived, see ADR 0001). No-op if nothing's marked.
@@ -189,12 +204,7 @@ export async function clearReminder(
   date: string,
   activityId: string
 ): Promise<void> {
-  const day = await db.days.where("[user_id+date]").equals([userId, date]).first()
-  if (!day) return
-  const da = await db.day_activities
-    .where("[day_id+activity_id]")
-    .equals([day.id, activityId])
-    .first()
+  const da = await findDayActivity(userId, date, activityId)
   if (!da) return
   const existing = await db.completions.where("day_activity_id").equals(da.id).first()
   if (existing) await deleteRow("completions", existing.id)
@@ -247,4 +257,61 @@ export async function completeWorkSession(session: WorkSession): Promise<WorkSes
   }
   await updateRow("work_sessions", row)
   return row
+}
+
+// ── Delete / removal ─────────────────────────────────────────────────────────
+
+// "Delete entire event": soft-archive the whole activity. recursOn filters
+// archived, so every occurrence (past + future) disappears from the day views,
+// while completions/work_sessions rows are kept for history/stats. Reversible
+// in data — there's no un-archive UI yet (see CLAUDE.md open questions).
+export async function archiveActivity(activityId: string): Promise<void> {
+  const activity = await db.activities.get(activityId)
+  if (!activity || activity.archived) return
+  await updateRow("activities", { ...activity, archived: true, updated_at: nowIso() })
+}
+
+// "Delete this day only": remove a single occurrence from one date without
+// touching the rule. For a recurring occurrence the date is recorded in the
+// activity's exception_dates so recursOn stops deriving it. Any state already
+// instantiated for that date (the day_activity + its completion/sessions) is
+// hard-deleted too — this wipes that day's record AND stops dayView's seen-loop
+// from resurrecting the orphaned day_activity as a manual item. Dexie has no
+// cascade, so children are deleted explicitly (children first keeps the sync
+// drain FK-safe); Postgres ON DELETE CASCADE covers the server side. The whole
+// exception-append + cascade runs in one transaction (the per-write helpers'
+// own transactions nest into it) so a mid-sequence crash can't orphan rows.
+export async function removeOccurrence(
+  userId: string,
+  date: string,
+  activityId: string
+): Promise<void> {
+  await db.transaction(
+    "rw",
+    [db.activities, db.days, db.day_activities, db.completions, db.work_sessions, db.syncQueue],
+    async () => {
+      const activity = await db.activities.get(activityId)
+      if (!activity) return
+
+      // 1. Suppress future derivation of this recurring occurrence. recursOn is
+      // false once the date is already excepted, so this can't append a duplicate.
+      if (recursOn(activity, date)) {
+        await updateRow("activities", {
+          ...activity,
+          exception_dates: [...(activity.exception_dates ?? []), date],
+          updated_at: nowIso(),
+        })
+      }
+
+      // 2. Delete any instantiated state for this date (children before parent).
+      const da = await findDayActivity(userId, date, activityId)
+      if (!da) return
+
+      const completion = await db.completions.where("day_activity_id").equals(da.id).first()
+      if (completion) await deleteRow("completions", completion.id)
+      const sessions = await db.work_sessions.where("day_activity_id").equals(da.id).toArray()
+      for (const s of sessions) await deleteRow("work_sessions", s.id)
+      await deleteRow("day_activities", da.id)
+    }
+  )
 }

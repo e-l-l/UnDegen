@@ -52,10 +52,14 @@ export function hourAfterLocal(time: string): string {
 }
 
 // Does this activity's rule produce an occurrence on `date`?
+// An archived activity produces nothing; a date in exception_dates is a
+// single-occurrence removal ("delete this day only") — the rule stands but
+// that one date is skipped. (?? [] guards rows created before the column.)
 export function recursOn(activity: Activity, date: string): boolean {
   return (
     !activity.archived &&
     activity.recurrence_start <= date &&
-    activity.recurrence_days.includes(weekdayOf(date))
+    activity.recurrence_days.includes(weekdayOf(date)) &&
+    !(activity.exception_dates ?? []).includes(date)
   )
 }

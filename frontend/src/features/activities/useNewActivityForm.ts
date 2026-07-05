@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { createActivity } from "@/db/repo"
 import { defaultStartTimeLocal, hourAfterLocal, nowTimeLocal, todayLocal } from "@/db/recurrence"
-import type { Activity, ActivityType, ReminderType, TaskMode } from "@/db/types"
+import type { ActivityType, NewActivityInput, ReminderType, TaskMode } from "@/db/types"
 
 type FieldErrors = {
   name?: string
@@ -68,7 +68,7 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
     if (submitting || !validate()) return
     setSubmitting(true)
     try {
-      const input: Omit<Activity, "id" | "user_id" | "created_at" | "updated_at" | "position" | "archived"> = {
+      const input: NewActivityInput = {
         name: name.trim(),
         type,
         recurrence_days: recurrenceDays,

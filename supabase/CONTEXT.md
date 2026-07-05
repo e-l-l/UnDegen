@@ -18,7 +18,8 @@ The cloud backend. There is **no custom server** — the app talks to Supabase d
 - `migrations/0004_notifications_cron.sql` — enables `pg_cron`/`pg_net`, stores the function URL + cron secret in Vault, and schedules the every-minute invocation (+ a nightly `notification_log` prune). **One-time setup with placeholders**; run after deploying the function.
 - `migrations/0005_notification_grants.sql` — grants `select/insert/update/delete` on the three `0003` tables to `authenticated` + `service_role`. **`0003` created RLS policies but no table grants**, and PostgREST checks the base-table grant *before* RLS — so every client write 403'd and the service-role function couldn't read them (a real prod incident; the `0001` tables got grants via Supabase's default-privilege auto-grant, `0003` didn't). RLS still scopes rows to their owner. **New envs: apply after `0003`.**
 - `migrations/0006_service_role_read_grants.sql` — grants `service_role` **SELECT** on `activities` / `days` / `day_activities` / `completions`. Same failure class as `0005`, different tables: the alarm reads these as `service_role`, but only `authenticated` had SELECT — so `from("activities").select(...)` was denied, the handler swallowed the error (`data ?? []`), `due` came back empty, and every tick returned `{"sent":0}` with an empty `notification_log`. **Second real prod incident** — reminders never fired. SELECT only (the function never writes these). **New envs: apply after `0001`.**
-- `functions/send-notifications/` — the Web Push sender (Deno). `index.ts` (handler) + `schedule.ts` (pure due-ness/slot logic, mirrors the frontend's `recurrence.ts`) + `schedule.test.ts` (`deno test`).
+- `migrations/0007_activity_exception_dates.sql` — adds `activities.exception_dates date[] not null default '{}'`: **single-occurrence removal** ("delete this day only"). A local date in the array is skipped by the recurrence expansion without touching the rule or archiving. Evaluated per-user against the *local* date in both `recursOn`s (app + function), never as a server-side `WHERE` (each user's "today" differs). **New envs: apply after `0001`.**
+- `functions/send-notifications/` — the Web Push sender (Deno). `index.ts` (handler) + `schedule.ts` (pure due-ness/slot logic, mirrors the frontend's `recurrence.ts` — its `recursOn` skips a date in `exception_dates`, and `index.ts` already filters `archived = false` in the activities query) + `schedule.test.ts` (`deno test`).
 
 ## What the schema encodes
 
@@ -90,8 +91,8 @@ VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:… CRON_SECRET=…` (generate VAPID 
 
 ## Not yet here (planned — see CLAUDE.md Open Questions)
 
-- **`activities.exception_dates date[]`** — skip a recurrence on a specific date without archiving.
 - **Server-side `missed` sweep** — the `missed` enum value is still reserved (ADR 0001), no cron writes it yet.
 - **Notification preferences** — `user_settings.quiet_hours_start/end` columns exist but nothing reads them; global mute / per-activity mute have no UI (deferred until a settings screen).
+- **Un-archive / restore** — `archiveActivity` is one-way from the UI; nothing flips `archived`/pops `exception_dates` back (no manage/settings screen yet).
 
-Landed: `push_subscriptions`, `user_settings`, `notification_log`, the `send-notifications` Edge Function, and `pg_cron`/`pg_net` (migrations 0003–0004). See the alarm section above.
+Landed: `push_subscriptions`, `user_settings`, `notification_log`, the `send-notifications` Edge Function, and `pg_cron`/`pg_net` (migrations 0003–0004); **`activities.exception_dates`** for single-occurrence removal (migration 0007, honored by both `recursOn`s). See the alarm section above.

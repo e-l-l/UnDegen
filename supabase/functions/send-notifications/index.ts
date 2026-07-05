@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
     admin
       .from("activities")
       .select(
-        "id, user_id, name, reminder_type, strict_time, soft_interval_mins, soft_start, soft_end, recurrence_days, recurrence_start"
+        "id, user_id, name, reminder_type, strict_time, soft_interval_mins, soft_start, soft_end, recurrence_days, recurrence_start, exception_dates"
       )
       .in("user_id", userIds)
       .eq("type", "reminder")

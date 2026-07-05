@@ -63,14 +63,16 @@ export function TodayScreen({ userId }: TodayScreenProps) {
     scrolledRef.current = true
   }, [data.loading])
 
+  const today = todayLocal()
+
   const toggleDone = (activityId: string, done: boolean) => {
     void (done
-      ? clearReminder(userId, todayLocal(), activityId)
-      : markReminder(userId, todayLocal(), activityId, "done"))
+      ? clearReminder(userId, today, activityId)
+      : markReminder(userId, today, activityId, "done"))
   }
 
   const startSession = (activityId: string) => {
-    void startWorkSession(userId, todayLocal(), activityId)
+    void startWorkSession(userId, today, activityId)
   }
 
   const stopSession = (session: WorkSession) => {
@@ -96,6 +98,8 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             upNext={data.upNext}
             nowLabel={data.nowLabel}
             onToggleDone={toggleDone}
+            userId={userId}
+            date={today}
           />
           <SignOutLink />
         </div>
@@ -145,6 +149,8 @@ export function TodayScreen({ userId }: TodayScreenProps) {
               upNext={data.upNext}
               nowLabel={data.nowLabel}
               onToggleDone={toggleDone}
+              userId={userId}
+              date={today}
             />
           </div>
 
@@ -158,6 +164,8 @@ export function TodayScreen({ userId }: TodayScreenProps) {
                   item={item}
                   onStart={() => startSession(item.activity.id)}
                   onStop={stopSession}
+                  userId={userId}
+                  date={today}
                 />
               ))}
             </div>

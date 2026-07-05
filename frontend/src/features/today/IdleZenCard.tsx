@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useLiveQuery } from "dexie-react-hooks"
 import { Play } from "lucide-react"
 
@@ -21,13 +22,14 @@ function shadeFor(fraction: number): string {
 interface IdleZenCardProps {
   activity: Activity
   onStart: () => void
+  menu?: ReactNode
 }
 
 // Zen mode idle → data card. There's no goal to progress toward, so
 // personality comes from a plain greyscale sparkline of recent session
 // lengths (never tinted pink — no session is "the target") plus a weekly
 // rollup. No percentage language anywhere, ever.
-export function IdleZenCard({ activity, onStart }: IdleZenCardProps) {
+export function IdleZenCard({ activity, onStart, menu }: IdleZenCardProps) {
   const Icon = iconForActivity(activity)
   const sessions = useLiveQuery(() => getCompletedSessions(activity.id), [activity.id])
   const hasHistory = (sessions?.length ?? 0) > 0
@@ -50,6 +52,7 @@ export function IdleZenCard({ activity, onStart }: IdleZenCardProps) {
         </div>
         <div className="min-w-0 flex-1 truncate text-[15.5px] font-medium text-idle-title">{activity.name}</div>
         <span className="shrink-0 text-[11px] font-medium tracking-[0.04em] text-idle-label uppercase">Idle</span>
+        {menu}
       </div>
 
       {hasHistory && (

@@ -104,7 +104,7 @@ Cloud-only, added by migration `0003` for Web Push (ADR 0003). Not mirrored in D
 ### `activities`
 Template/definition of a trackable thing. Two types: `reminder` and `long_task`. Type-specific config lives as nullable columns on this table (no extension tables).
 
-Key columns: `id`, `user_id`, `name`, `type`, `recurrence_days` (int[]), `recurrence_start` (date), `archived`, `position`
+Key columns: `id`, `user_id`, `name`, `type`, `recurrence_days` (int[]), `recurrence_start` (date), `exception_dates` (date[] — dates the rule skips; "delete this day only", migration `0007`), `archived` (soft-delete; "delete entire event"), `position`
 
 Reminder-specific (null if long_task): `reminder_type` (`strict`|`soft`), `strict_time`, `soft_start`, `soft_interval_mins`, `soft_end`
 
@@ -150,6 +150,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Config storage | Nullable columns on `activities` | Avoids multi-table joins for every config read; ~10 nullables is fine for this scale |
 | `day_activities.type` | Removed | Inferrable from join; storing it creates drift risk |
 | Recurrence model | Calendar-style (derive, don't pre-store) | Occurrences expanded on read from `activities` recurrence; `day_activities` are override rows instantiated lazily when an instance gains state; `days` are sparse/engagement-based. Alarms fire server-side from `activities`, independent of materialisation |
+| Deleting a task | Day → `exception_dates`; event → `archived` | "Delete this day only" appends the date to `activities.exception_dates` (both `recursOn`s skip it) and wipes that date's instantiated state; "delete entire event" flips `archived` (hides everywhere, keeps `completions`/`work_sessions` for history). Both one-way from the UI in v0. `repo.removeOccurrence` / `repo.archiveActivity` |
 | Ad-hoc tasks (v0) | Not supported | All `day_activities` have an `activity_id`; everything comes from a template |
 | Pause/resume (v0) | Not supported | Adds timer + sync + analytics complexity; `total_secs` is a simple diff for now |
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
@@ -165,10 +166,10 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 
 ## Open Questions (unresolved — flag before implementing)
 
-- **Recurrence exceptions** — a "skip" (`completion.status='skipped'`) marks an occurrence skipped but still *shows* it. Fully *removing* an occurrence from a date (hide it, don't archive the whole activity) is still unsolved; an `exception_dates: date[]` column on `activities` is the likely fix when needed.
+- **Un-archive / restore** — deleting a task is one-way from the UI. "Delete entire event" sets `archived`; "delete this day" appends to `exception_dates`. Nothing reverses either (no undo toast, no manage/archived screen), so an archived activity or a removed day can't be brought back in-app yet. Restoring needs a settings/manage screen — same gap as notification preferences below.
 - **Notification preferences UI** — global mute / quiet hours / per-activity mute have no screen. `user_settings.quiet_hours_*` columns are reserved but unread; enabling/disabling is only reachable via the post-create ask (no re-enable once granted/blocked) until a settings screen exists.
 
-*(Resolved: **push_subscriptions** — landed in migration `0003` alongside `user_settings` + `notification_log`; Web Push is built. See ADR 0003.)*
+*(Resolved: **push_subscriptions** — landed in migration `0003` alongside `user_settings` + `notification_log`; Web Push is built. See ADR 0003. **Recurrence exceptions** — single-occurrence removal landed via `activities.exception_dates` (migration `0007`), honored by both `recursOn`s; see `repo.removeOccurrence`.)*
 
 ---
 

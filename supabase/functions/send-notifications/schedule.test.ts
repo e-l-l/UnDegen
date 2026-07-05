@@ -23,6 +23,7 @@ function reminder(partial: Partial<ReminderActivity>): ReminderActivity {
     soft_end: null,
     recurrence_days: [0, 1, 2, 3, 4, 5, 6],
     recurrence_start: "2020-01-01",
+    exception_dates: [],
     ...partial,
   }
 }
@@ -61,6 +62,14 @@ Deno.test("recursOn matches weekday and start date", () => {
   assertEquals(recursOn(a, { date: "2021-01-01", minutes: 0, weekday: 4 }), false)
   // before recurrence_start
   assertEquals(recursOn(a, { date: "2020-12-31", minutes: 0, weekday: 5 }), false)
+})
+
+Deno.test("recursOn skips a date in exception_dates (delete this day only)", () => {
+  const a = reminder({ recurrence_days: [5], recurrence_start: "2021-01-01", exception_dates: ["2021-01-08"] })
+  // The rule still fires on other matching dates…
+  assertEquals(recursOn(a, { date: "2021-01-01", minutes: 0, weekday: 5 }), true)
+  // …but the excepted date is skipped even though the weekday/start match.
+  assertEquals(recursOn(a, { date: "2021-01-08", minutes: 0, weekday: 5 }), false)
 })
 
 Deno.test("dueSlots strict: single fire inside the lookback window", () => {

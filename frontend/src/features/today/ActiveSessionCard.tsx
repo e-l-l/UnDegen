@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Check } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ interface ActiveSessionCardProps {
   activity: Activity
   session: WorkSession
   onStop: (session: WorkSession) => void
+  menu?: ReactNode
 }
 
 // Live M:SS ticking timer. Derives elapsed from a wall-clock diff against
@@ -21,7 +22,7 @@ function formatMMSS(totalSecs: number) {
   return `${m}:${String(sec).padStart(2, "0")}`
 }
 
-export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCardProps) {
+export function ActiveSessionCard({ activity, session, onStop, menu }: ActiveSessionCardProps) {
   const [, tick] = useState(0)
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCa
           <span className="size-1.75 rounded-full bg-pink shadow-[0_0_8px_rgba(242,167,187,0.9)] motion-safe:animate-session-pulse" />
           <span className="text-[11.5px] font-semibold text-pink">In session</span>
         </div>
+        {menu}
       </div>
 
       <div className="mt-4 flex items-baseline gap-2.25">

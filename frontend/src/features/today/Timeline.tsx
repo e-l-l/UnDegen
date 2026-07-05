@@ -10,13 +10,15 @@ interface TimelineProps {
   upNext: ReminderBucket[]
   nowLabel: string
   onToggleDone: (activityId: string, done: boolean) => void
+  userId: string
+  date: string
 }
 
 // The one shared timeline body for both breakpoints — mobile/desktop only
 // differ in the surrounding chrome (header, nav, rail), not in how rows
 // render, so unlike the header/nav blocks this isn't duplicated per lg:.
 export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timeline(
-  { earlier, upNext, nowLabel, onToggleDone },
+  { earlier, upNext, nowLabel, onToggleDone, userId, date },
   nowRef
 ) {
   const rows = (buckets: ReminderBucket[]) =>
@@ -30,6 +32,9 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           Icon={iconForActivity(item.activity)}
           done={done}
           onToggle={() => onToggleDone(item.activity.id, done)}
+          activity={item.activity}
+          date={date}
+          userId={userId}
         />
       )
     })

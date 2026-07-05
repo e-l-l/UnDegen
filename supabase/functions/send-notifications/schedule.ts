@@ -21,6 +21,7 @@ export interface ReminderActivity {
   soft_end: string | null
   recurrence_days: number[] // JS getDay(): 0=Sun..6=Sat
   recurrence_start: string // 'YYYY-MM-DD'
+  exception_dates: string[] // 'YYYY-MM-DD' dates the rule skips ("delete this day only")
 }
 
 export interface LocalContext {
@@ -73,10 +74,14 @@ export function formatHHMM(minutes: number): string {
 }
 
 // Same predicate as the frontend's recursOn, evaluated in the user's local date.
+// A local date in exception_dates is a single-occurrence removal ("delete this
+// day only") — skip it so no push fires for a deleted day. (archived is filtered
+// upstream in the activities query; ?? [] guards a mis-shaped fixture.)
 export function recursOn(activity: ReminderActivity, ctx: LocalContext): boolean {
   return (
     activity.recurrence_start <= ctx.date &&
-    activity.recurrence_days.includes(ctx.weekday)
+    activity.recurrence_days.includes(ctx.weekday) &&
+    !(activity.exception_dates ?? []).includes(ctx.date)
   )
 }
 

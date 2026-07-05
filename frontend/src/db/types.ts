@@ -19,6 +19,7 @@ export interface Activity {
   type: ActivityType
   recurrence_days: number[] // JS Date.getDay(): 0=Sun .. 6=Sat
   recurrence_start: string // date
+  exception_dates: string[] // dates the rule skips — 'YYYY-MM-DD' ("delete this day only")
   archived: boolean
   position: number
 
@@ -36,6 +37,14 @@ export interface Activity {
   created_at: string
   updated_at: string
 }
+
+// Fields a caller supplies to create an activity; the rest (id, ownership,
+// timestamps, position, archived, exception_dates) are stamped by
+// repo.createActivity. Shared so callers and the repo can't drift on the shape.
+export type NewActivityInput = Omit<
+  Activity,
+  "id" | "user_id" | "created_at" | "updated_at" | "position" | "archived" | "exception_dates"
+>
 
 // ── days — one row per calendar date per user ────────────────────────────────
 export interface Day {

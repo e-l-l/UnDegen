@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useLiveQuery } from "dexie-react-hooks"
 import { Play } from "lucide-react"
 
@@ -10,13 +11,14 @@ import { iconForActivity } from "./iconForActivity"
 interface IdleGoalCardProps {
   activity: Activity
   onStart: () => void
+  menu?: ReactNode
 }
 
 // Goal mode idle → progress-bar card. Progress is banked across every
 // completed session this activity has ever had, not scoped to today — a
 // goal is worked toward over multiple sittings, so 0% is just the natural
 // low end of the bar rather than a separate empty state.
-export function IdleGoalCard({ activity, onStart }: IdleGoalCardProps) {
+export function IdleGoalCard({ activity, onStart, menu }: IdleGoalCardProps) {
   const Icon = iconForActivity(activity)
   const sessions = useLiveQuery(() => getCompletedSessions(activity.id), [activity.id])
   const bankedSecs = (sessions ?? []).reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
@@ -32,6 +34,7 @@ export function IdleGoalCard({ activity, onStart }: IdleGoalCardProps) {
         </div>
         <div className="min-w-0 flex-1 truncate text-[15.5px] font-medium text-idle-title">{activity.name}</div>
         <span className="shrink-0 text-[11px] font-medium tracking-[0.04em] text-idle-label uppercase">Idle</span>
+        {menu}
       </div>
 
       <div className="relative mt-4.5 h-1.5 rounded-full bg-idle-track">
