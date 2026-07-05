@@ -192,7 +192,7 @@ export function StatsScreen({ userId }: { userId: string }) {
                   <div className="min-w-0 flex-[1.35]">
                     <SectionLabel>When you focus</SectionLabel>
                     <div className="mb-3.5 mt-1 text-[12px] text-[#5E5E5E]">All-time · long-task sessions, local start hour</div>
-                    <Heatmap buckets={data.heatmap} laneGap={35} />
+                    <Heatmap buckets={data.heatmap} laneGap={37.5} />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
