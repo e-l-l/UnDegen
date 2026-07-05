@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button"
 import { todayLocal } from "@/db/recurrence"
 import { clearReminder, completeWorkSession, markReminder, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
-import { NewActivityDialog } from "@/features/activities/NewActivityDialog"
-import { NotificationAsk } from "@/features/notifications/NotificationAsk"
-import { shouldOfferAsk } from "@/push/ask"
-import { supabase } from "@/utils/supabase"
 import { DesktopIsland } from "./DesktopIsland"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
+import { NewActivityFlow } from "./NewActivityFlow"
+import { SignOutLink } from "./SignOutLink"
 import { Timeline } from "./Timeline"
 import { useTodayData } from "./useTodayData"
 
@@ -19,27 +17,9 @@ interface TodayScreenProps {
   userId: string
 }
 
-// Temporary, mirrors the old placeholder screen's own comment: no "You"
-// screen exists yet to own this, so it's a small text link at the end of the
-// primary scroll content until one does.
-function SignOutLink() {
-  return (
-    <div className="py-6 text-center">
-      <button
-        type="button"
-        onClick={() => void supabase.auth.signOut()}
-        className="text-[13px] text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline"
-      >
-        Sign out
-      </button>
-    </div>
-  )
-}
-
 export function TodayScreen({ userId }: TodayScreenProps) {
   const data = useTodayData(userId)
   const [creatingActivity, setCreatingActivity] = useState(false)
-  const [askNotifications, setAskNotifications] = useState(false)
 
   const mobileScrollRef = useRef<HTMLDivElement>(null)
   const mobileNowRef = useRef<HTMLDivElement>(null)
@@ -174,21 +154,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
         </div>
       </div>
 
-      {creatingActivity && (
-        <NewActivityDialog
-          userId={userId}
-          onClose={() => setCreatingActivity(false)}
-          onCreated={(type) => {
-            // Highest-intent moment to ask — but only for reminders, and only if
-            // we can still offer (not already granted/blocked, or iOS needs install).
-            if (type === "reminder" && shouldOfferAsk()) setAskNotifications(true)
-          }}
-        />
-      )}
-
-      {askNotifications && (
-        <NotificationAsk userId={userId} onClose={() => setAskNotifications(false)} />
-      )}
+      <NewActivityFlow userId={userId} open={creatingActivity} onOpenChange={setCreatingActivity} />
     </>
   )
 }

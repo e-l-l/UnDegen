@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { AuthScreen } from "@/features/auth/AuthScreen"
 import { StatsDetailScreen } from "@/features/stats/StatsDetailScreen"
 import { StatsScreen } from "@/features/stats/StatsScreen"
+import { FocusScreen } from "@/features/today/FocusScreen"
 import { TodayScreen } from "@/features/today/TodayScreen"
 import { useSession } from "@/hooks/useSession"
 import { useReconcileNotifications } from "@/push/useReconcile"
@@ -22,6 +23,7 @@ function SignedInApp({ userId }: { userId: string }) {
     <BrowserRouter>
       <Routes>
         <Route path="/today" element={<TodayScreen userId={userId} />} />
+        <Route path="/focus" element={<FocusScreen userId={userId} />} />
         <Route path="/stats" element={<StatsScreen userId={userId} />} />
         <Route path="/stats/:activityId" element={<StatsDetailScreen userId={userId} />} />
         <Route path="*" element={<Navigate to="/today" replace />} />
