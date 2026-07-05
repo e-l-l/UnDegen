@@ -18,6 +18,18 @@ export function weekdayOf(date: string): number {
   return parseLocalDate(date).getDay()
 }
 
+// Mon=0..Sun=6 (design week order) from JS getDay() (0=Sun..6=Sat). Doubles as
+// "days since Monday", so subtracting it snaps a date back to its week's Monday.
+export const mondayIndex = (jsDay: number): number => (jsDay + 6) % 7
+
+// Monday (design week start) of the calendar week containing `date`, as YYYY-MM-DD.
+// setDate handles month/year rollover; todayLocal reformats back to a local string.
+export function startOfWeekMonday(date: string): string {
+  const d = parseLocalDate(date)
+  d.setDate(d.getDate() - mondayIndex(d.getDay()))
+  return todayLocal(d)
+}
+
 // Current local wall-clock as an 'HH:MM' (24hr) string — same shape as the
 // zoneless `time` columns (strict_time etc.), so it compares lexicographically.
 export function nowTimeLocal(d: Date = new Date()): string {

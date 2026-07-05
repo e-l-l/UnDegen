@@ -22,7 +22,7 @@ function StatsLoading() {
     <>
       <div className="flex h-svh flex-col bg-background lg:hidden">
         <div className="shrink-0 px-5.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-1">
-          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">Rolling 7 days · to today</div>
+          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">This week · since Monday</div>
           <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-ink">Stats</div>
         </div>
         <div className="flex flex-1 items-center justify-center px-5.5">
@@ -64,7 +64,7 @@ export function StatsScreen({ userId }: { userId: string }) {
       {/* ════════ Mobile ════════ */}
       <div className="flex h-svh flex-col bg-background lg:hidden">
         <div className="shrink-0 px-5.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-1">
-          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">Rolling 7 days · to today</div>
+          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">This week · since Monday</div>
           <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-ink">Stats</div>
         </div>
 
@@ -142,7 +142,7 @@ export function StatsScreen({ userId }: { userId: string }) {
       <div className="relative hidden h-svh overflow-hidden bg-background lg:block">
         <DesktopIsland />
         <div className="h-full overflow-auto px-10 pt-[calc(var(--island-h)+0.5rem)] pb-8.5">
-          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">Rolling 7 days · to today</div>
+          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">This week · since Monday</div>
           <div className="mt-1.5 text-[27px] font-semibold tracking-[-0.02em] text-ink">Stats</div>
 
           {/* top row: hero + most avoided */}

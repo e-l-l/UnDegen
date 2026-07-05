@@ -12,8 +12,9 @@ export const deltaDir = (cur: number, prev: number): DeltaDir =>
 
 // ── /stats overview ──────────────────────────────────────────────────────────
 export interface StatsOverview {
-  // rolling 7 days ("this week"); planned/showedUp are active-only rate stats,
-  // focusMins is an amount stat (includes archived).
+  // current Mon–Sun calendar week ("this week"), partial → elapsed days only;
+  // planned/showedUp are active-only rate stats, focusMins is an amount stat
+  // (includes archived).
   week: { showedUp: number; planned: number; focusMins: number }
   prevWeek: { showedUp: number; planned: number; focusMins: number } // for deltas
   // weeks the showed-up rate has declined in a row (drives the "Nth week down" roast)
@@ -34,7 +35,7 @@ export interface ActivityStatRow {
   // reminder:
   done?: number
   planned?: number
-  weekStrip?: WeekStripCell[] // 7 entries, rolling 7 days ending today (oldest→newest), not calendar Mon..Sun
+  weekStrip?: WeekStripCell[] // 7 entries, current calendar week Mon→Sun (oldest→newest); future days render pending
   // long_task:
   focusMins?: number
   sparkline?: number[] // recent session minutes, oldest→newest

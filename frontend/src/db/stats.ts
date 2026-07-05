@@ -1,5 +1,5 @@
 import { db } from "./db"
-import { nowTimeLocal, parseLocalDate, recursOn, todayLocal, weekdayOf } from "./recurrence"
+import { mondayIndex, nowTimeLocal, parseLocalDate, recursOn, startOfWeekMonday, todayLocal, weekdayOf } from "./recurrence"
 import type { Activity, Completion, WorkSession } from "./types"
 import { deltaDir } from "@/features/stats/types"
 import type {
@@ -16,7 +16,9 @@ import type {
 // StatsOverview / StatsDetail shapes the Stats UI consumes. At this scale the
 // full-scan approach is fine (no timestamp indexes; see db/CONTEXT.md).
 //
-// Windows: "this week" = rolling 7 days ending today; delta vs the prior 7 days.
+// Windows: "this week" = the Mon–Sun calendar week containing today; delta vs the
+// prior calendar week. The current week is partial — counts elapsed days only
+// (Mon→today); future days aren't counted as planned (see adherence/reminderTally).
 // The heatmap is all-time. Archived rule: amount stats (focus banked, trend,
 // heatmap) include archived history; rate stats (showed-up ÷ planned, adherence,
 // most-avoided) are active-only. Timestamps are UTC ISO → new Date() renders them
@@ -44,9 +46,6 @@ function rangeDates(endDate: string, count: number): string[] {
   for (let i = count - 1; i >= 0; i--) out.push(shiftDate(endDate, -i))
   return out
 }
-// Mon=0..Sun=6 (design order) from JS getDay() (0=Sun..6=Sat)
-const mondayIndex = (jsDay: number): number => (jsDay + 6) % 7
-
 // Memoised weekdayOf — the same ~60 dates are tested by recursOn across every
 // window loop (adherence, weeksDown, flake, per-activity rows). A date string
 // always maps to the same weekday, so this cache is deterministic and bounded
@@ -62,9 +61,13 @@ function wd(date: string): number {
   return w
 }
 
-// The 7-day window `w` weeks back from today (w=0 = current rolling week), oldest→newest.
-const weekWindow = (today: string, w: number): string[] => rangeDates(shiftDate(today, -7 * w), 7)
-// `count` weekly windows, oldest→newest (last entry is the current rolling week).
+// The Mon–Sun calendar week `w` weeks back from the week containing `today`
+// (w=0 = current week), oldest→newest. rangeDates(sunday, 7) yields Mon..Sun.
+// The current week may include future days (elapsed-only counting is enforced by
+// the `date > l.today` guards in adherence/reminderTally).
+const weekWindow = (today: string, w: number): string[] =>
+  rangeDates(shiftDate(startOfWeekMonday(today), 6 - 7 * w), 7)
+// `count` calendar weeks, oldest→newest (last entry is the current week).
 function weekWindows(today: string, count: number): string[][] {
   const out: string[][] = []
   for (let w = count - 1; w >= 0; w--) out.push(weekWindow(today, w))
@@ -198,6 +201,7 @@ function adherence(l: Loaded, dates: string[]): { showedUp: number; planned: num
   for (const a of l.activities) {
     if (a.archived) continue
     for (const date of dates) {
+      if (date > l.today) continue // future occurrence — not yet plannable-as-missed
       if (!recursOn(a, date, wd(date))) continue
       planned++
       if (showedUp(l, a, date)) showed++
@@ -213,15 +217,18 @@ function focusMins(l: Loaded, dates: string[]): number {
   return Math.round(secs / 60)
 }
 
-// weeks-in-a-row the showed-up rate has declined (for the escalating roast)
+// weeks-in-a-row the showed-up rate has declined (for the escalating roast).
+// Scored over *completed* weeks only — the current week (w=0) is partial, so
+// letting one missed Monday morning escalate the roast against a full prior week
+// would punish at week start, against the app's non-punishing intent.
 function weeksDown(l: Loaded): number {
   const rateAt = (w: number) => {
     const a = adherence(l, weekWindow(l.today, w))
     return { rate: a.planned ? a.showedUp / a.planned : 0, planned: a.planned }
   }
   let n = 0
-  let cur = rateAt(0)
-  for (let w = 0; w < TREND_WEEKS; w++) {
+  let cur = rateAt(1) // last completed week
+  for (let w = 1; w < TREND_WEEKS; w++) {
     const prev = rateAt(w + 1) // carried into next iteration's `cur` — each week scored once
     if (cur.planned && prev.planned && cur.rate < prev.rate) n++
     else break
@@ -235,6 +242,7 @@ function reminderTally(l: Loaded, a: Activity, dates: string[]): { done: number;
   let done = 0
   let planned = 0
   for (const date of dates) {
+    if (date > l.today) continue // future occurrence — not yet plannable-as-missed
     if (!recursOn(a, date, wd(date))) continue
     planned++
     if (reminderDone(l, a.id, date)) done++
@@ -251,7 +259,7 @@ function activityFocusMins(l: Loaded, activityId: string, dates: string[]): numb
   return Math.round(secs / 60)
 }
 
-// 7-cell chronological strip for the rolling week (oldest→newest)
+// 7-cell chronological strip for the calendar week, Mon→Sun (oldest→newest)
 function weekStrip(l: Loaded, a: Activity, weekDates: string[]): WeekStripCell[] {
   return weekDates.map((date): WeekStripCell => {
     if (!recursOn(a, date, wd(date))) return "pending" // no occurrence that day
@@ -300,7 +308,10 @@ export async function getStatsOverview(userId: string): Promise<StatsOverview> {
     }
   }
 
-  // weekday flake: not-done ÷ planned per weekday, over the last N weeks (reminders)
+  // weekday flake: not-done ÷ planned per weekday over the last N weeks (reminders).
+  // Deliberately a rolling FLAKE_WEEKS*7-day window, NOT calendar-week-aligned like
+  // the rest of stats: this is a per-weekday distribution, so week boundaries are
+  // irrelevant — a trailing window just needs even, fresh samples per weekday.
   const flakeDates = rangeDates(l.today, FLAKE_WEEKS * 7)
   const flakePlanned = Array(7).fill(0)
   const flakeNotDone = Array(7).fill(0)

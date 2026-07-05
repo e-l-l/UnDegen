@@ -4,12 +4,11 @@ import { Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { getCompletedSessions } from "@/db/taskHistory"
-import { todayLocal } from "@/db/recurrence"
+import { startOfWeekMonday, todayLocal } from "@/db/recurrence"
 import type { Activity } from "@/db/types"
 import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 // Closed palette of the exact greys from the design handoff — not an
 // interpolation, so the sparkline never drifts to an unspecified shade.
 const SPARK_SHADES = ["#282828", "#2c2c2c", "#333333", "#3a3a3a"]
@@ -35,14 +34,18 @@ export function IdleZenCard({ activity, onStart, menu }: IdleZenCardProps) {
   const hasHistory = (sessions?.length ?? 0) > 0
   const recent = (sessions ?? []).slice(-6)
   const maxSecs = Math.max(1, ...recent.map((s) => s.total_secs ?? 0))
-  const weekAgo = Date.now() - WEEK_MS
-  const weekSecs = (sessions ?? [])
-    .filter((s) => new Date(s.started_at).getTime() >= weekAgo)
-    .reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
   const today = todayLocal()
-  const todaySecs = (sessions ?? [])
-    .filter((s) => todayLocal(new Date(s.started_at)) === today)
-    .reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
+  const monday = startOfWeekMonday(today) // this calendar week's Monday (design week start)
+  // One pass: format each session's local date once (YYYY-MM-DD, string-comparable),
+  // tally into today and this-week (Mon→now).
+  let weekSecs = 0
+  let todaySecs = 0
+  for (const s of sessions ?? []) {
+    const day = todayLocal(new Date(s.started_at))
+    const secs = s.total_secs ?? 0
+    if (day >= monday) weekSecs += secs
+    if (day === today) todaySecs += secs
+  }
 
   return (
     <div className="rounded-[18px] border border-idle-border bg-idle-bg p-4.5">
