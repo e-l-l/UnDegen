@@ -11,14 +11,18 @@ interface ActiveSessionCardProps {
   onStop: (session: WorkSession) => void
 }
 
-// Live M:SS ticking timer. Derives elapsed from a wall-clock diff against
+// Live ticking timer. Derives elapsed from a wall-clock diff against
 // started_at on every tick (not a naive counter) so backgrounding/throttling
 // the tab can't drift the display — see the design handoff's own note on this.
-function formatMMSS(totalSecs: number) {
+// M:SS under an hour; rolls over to H:MM:SS once past 60 min so long Zen
+// sessions read as "1:55:35" rather than a runaway "115:35".
+function formatElapsed(totalSecs: number) {
   const s = Math.max(0, Math.floor(totalSecs))
-  const m = Math.floor(s / 60)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
-  return `${m}:${String(sec).padStart(2, "0")}`
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
 }
 
 export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCardProps) {
@@ -64,7 +68,7 @@ export function ActiveSessionCard({ activity, session, onStop }: ActiveSessionCa
 
       <div className="mt-4 flex items-baseline gap-2.25">
         <div className="text-[34px] leading-none font-semibold tracking-[-0.02em] text-session-timer tabular-nums lg:text-[30px]">
-          {formatMMSS(elapsedSecs)}
+          {formatElapsed(elapsedSecs)}
         </div>
         <div className="text-[12.5px] text-session-muted">
           {isGoal ? `elapsed · goal ${session.goal_duration_mins} min` : "elapsed · no limit"}
