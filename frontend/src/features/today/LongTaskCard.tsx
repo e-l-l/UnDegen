@@ -18,8 +18,11 @@ interface LongTaskCardProps {
 // banked-progress bar, zen mode gets a session-length sparkline. Mode is set
 // once at creation (activity.default_mode) and never changes per session, so
 // there's no third branch to consider here. TaskActions wraps the whole card so
-// the ⋮ menu (passed into each card's header) shares one delete dialog; the
-// `group` wrapper is the hover target that reveals the kebab.
+// the ⋮ menu (passed into each idle card's header) shares one delete dialog; the
+// `group` wrapper is the hover target that reveals the kebab. The active-session
+// card omits the visible kebab — its bordered "In session" pill owns the header's
+// right edge, so delete falls to the shared right-click / long-press context menu
+// (still wired via the TaskActions wrapper, independent of the kebab).
 export function LongTaskCard({ item, onStart, onStop, userId, date }: LongTaskCardProps) {
   const { activity, sessions } = item
   const active = sessions.find((s) => s.status === "in_progress")
@@ -29,7 +32,7 @@ export function LongTaskCard({ item, onStart, onStop, userId, date }: LongTaskCa
       {(kebab) => (
         <div className="group">
           {active ? (
-            <ActiveSessionCard activity={activity} session={active} onStop={onStop} menu={kebab} />
+            <ActiveSessionCard activity={activity} session={active} onStop={onStop} />
           ) : activity.default_mode === "goal" ? (
             <IdleGoalCard activity={activity} onStart={onStart} menu={kebab} />
           ) : (
