@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from "react"
 // Ridgeline focus-density heatmap — hand-rolled SVG, NOT a library (decided by
 // research; see features/stats/DESIGN_BRIEF.md §6 / the design hand-off). Seven
 // lanes (Mon→Sun, top→bottom), each a smooth filled curve of focus intensity
-// across the waking day. The one sanctioned heavy use of pink: intensity is a
+// across the full 24h day (12a→11p) — night-owl sessions render, not clipped.
+// The one sanctioned heavy use of pink: intensity is a
 // data signal. Reused at both scopes (aggregate on /stats, single-activity on
 // /stats/:id) — takes a buckets[7][24] prop (minutes; local start hour of
 // long-task sessions, all-time, incl. archived).
@@ -15,7 +16,7 @@ interface HeatmapProps {
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-const START_H = 6
+const START_H = 0
 const END_H = 23
 // gaussian kernel → organic hills instead of per-hour spikes
 const KERNEL = [0.11, 0.24, 0.3, 0.24, 0.11]

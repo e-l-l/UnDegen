@@ -21,14 +21,16 @@ function DeltaArrow({ dir, size, color }: { dir: DeltaDir; size: number; color: 
   return <Icon size={size} color={color} strokeWidth={2} />
 }
 
-// ── delta chip (hero) — pill with prior-week value ────────────────────────────
+// ── delta chip (hero) — pill with arrow + change-magnitude vs prior week ───────
 export function DeltaChip({ dir, label, size = "sm" }: { dir: DeltaDir; label: string; size?: "sm" | "lg" }) {
+  // positive delta uses the pink signal; neutral ("same") and negative stay grey
+  const color = dir === "up" ? "#f2a7bb" : "#9A9A9A"
   return (
     <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#232323] bg-[#181818] py-1 pl-2 pr-2.5 text-[#9A9A9A]"
-      style={{ fontSize: size === "lg" ? 13 : 12 }}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#232323] bg-[#181818] py-1 pl-2 pr-2.5"
+      style={{ fontSize: size === "lg" ? 13 : 12, color }}
     >
-      <DeltaArrow dir={dir} size={13} color="#9A9A9A" />
+      <DeltaArrow dir={dir} size={13} color={color} />
       <span className="tabular-nums">{label}</span>
     </span>
   )

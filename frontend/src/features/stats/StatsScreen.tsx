@@ -50,8 +50,9 @@ export function StatsScreen({ userId }: { userId: string }) {
   const { week, prevWeek } = data
   const showedDir = deltaDir(week.showedUp, prevWeek.showedUp)
   const focusDir = deltaDir(week.focusMins, prevWeek.focusMins)
-  const showedDeltaLabel = showedDir === "flat" ? "same" : `${prevWeek.showedUp} / ${prevWeek.planned}`
-  const focusDeltaLabel = focusDir === "flat" ? "same" : fmtMins(prevWeek.focusMins)
+  // delta vs last week: magnitude only — the DeltaChip arrow already carries direction
+  const showedDeltaLabel = showedDir === "flat" ? "same" : `${Math.abs(week.showedUp - prevWeek.showedUp)}`
+  const focusDeltaLabel = focusDir === "flat" ? "same" : fmtMins(Math.abs(week.focusMins - prevWeek.focusMins))
   const roast = heroCopy(week.showedUp, week.planned, data.weeksDown)
 
   const isEmpty = week.planned === 0 && data.activities.length === 0
