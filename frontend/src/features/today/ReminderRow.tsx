@@ -40,9 +40,12 @@ export function ReminderRow({ time, title, Icon, done, missed, onToggle, onToggl
             faded && "opacity-50"
           )}
         >
+          {/* `time` is one line for strict/soft; a random reminder passes a
+              two-line window range ("9:00 AM\n–5:00 PM") — whitespace-pre-line
+              stacks it without widening the fixed column. */}
           <div
             className={cn(
-              "w-14 shrink-0 text-right text-[12.5px] whitespace-nowrap tabular-nums lg:w-16 lg:text-[13px]",
+              "w-14 shrink-0 text-right text-[12.5px] leading-tight whitespace-pre-line tabular-nums lg:w-16 lg:text-[13px]",
               faded ? "text-ink-faint" : "text-ink-dim"
             )}
           >

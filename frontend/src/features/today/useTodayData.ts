@@ -28,10 +28,17 @@ function parseHHMM(value: string): number {
   return h * 60 + m
 }
 
-// Anchor time for a reminder row. Soft reminders can re-nudge across a window
-// (soft_start..soft_end) — v1 only anchors on the first nudge, not every one.
+// Anchor minute a reminder row sorts by. strict → its time. random → the window
+// END, so a not-yet-fired surprise stays in "up next" for its whole window
+// instead of jumping to "earlier" the moment the window opens. soft → the window
+// start (v1 anchors on the first nudge, not every one).
 function anchorMinutesFor(activity: DayItem["activity"]): number | null {
-  const time = activity.reminder_type === "strict" ? activity.strict_time : activity.soft_start
+  const time =
+    activity.reminder_type === "strict"
+      ? activity.strict_time
+      : activity.reminder_type === "random"
+        ? activity.soft_end
+        : activity.soft_start
   return time ? parseHHMM(time) : null
 }
 
@@ -41,6 +48,19 @@ function formatTimeLabel(minutes: number): string {
   const period = h24 >= 12 ? "PM" : "AM"
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12
   return `${h12}:${String(m).padStart(2, "0")} ${period}`
+}
+
+// The time text on the row. A random reminder shows its window as a range — the
+// exact fire minute stays hidden (surprise is the point); everything else shows
+// its single anchor time.
+function timeLabelFor(activity: DayItem["activity"], anchor: number): string {
+  if (activity.reminder_type === "random" && activity.soft_start) {
+    // anchor is already soft_end (see anchorMinutesFor), so only soft_start needs
+    // parsing. Newline-separated so the row renders it as two stacked lines (the
+    // fixed time column is too narrow for a one-line range). See ReminderRow.
+    return `${formatTimeLabel(parseHHMM(activity.soft_start))}\n–${formatTimeLabel(anchor)}`
+  }
+  return formatTimeLabel(anchor)
 }
 
 // The one Today read: a live Dexie query over getDayItems, plus a minute-tick
@@ -70,7 +90,11 @@ export function useTodayData(userId: string): TodayData {
     for (const item of reminders) {
       const anchor = anchorMinutesFor(item.activity)
       if (anchor === null) continue
-      const bucket: ReminderBucket = { item, timeLabel: formatTimeLabel(anchor), anchorMinutes: anchor }
+      const bucket: ReminderBucket = {
+        item,
+        timeLabel: timeLabelFor(item.activity, anchor),
+        anchorMinutes: anchor,
+      }
       if (anchor <= nowMinutes) earlier.push(bucket)
       else upNext.push(bucket)
     }

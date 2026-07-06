@@ -6,7 +6,7 @@
 // IANA timezone: what local date/minute is it, does this reminder recur today, and
 // which of its slots fall in the recent lookback window.
 
-export type ReminderKind = "strict" | "soft"
+export type ReminderKind = "strict" | "soft" | "random"
 
 // Subset of the activities row the scheduler needs. Postgres `time` columns arrive
 // as 'HH:MM:SS' strings via PostgREST.
@@ -73,6 +73,20 @@ export function formatHHMM(minutes: number): string {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 }
 
+// FNV-1a 32-bit — a tiny deterministic string hash (pure arithmetic, no crypto).
+// Used to place a 'random' reminder's single fire minute: seeding on
+// `${activity.id}|${localDate}` makes the minute stable across every cron tick of
+// that day (so notification_log dedupes it) yet different each day. Not for
+// security — just an unpredictable-to-the-user, reproducible-to-the-server pick.
+export function hash32(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+
 // Same predicate as the frontend's recursOn, evaluated in the user's local date.
 // A local date in exception_dates is a single-occurrence removal ("delete this
 // day only") — skip it so no push fires for a deleted day. (archived is filtered
@@ -87,12 +101,14 @@ export function recursOn(activity: ReminderActivity, ctx: LocalContext): boolean
 
 // Slot minutes due within the lookback window (nowMinutes - lookback, nowMinutes].
 // strict → the single strict_time. soft → every soft_start + k·interval ≤ soft_end.
-// The lookback tolerates cron jitter / a brief outage; the notification_log stops
-// any slot from firing twice.
+// random → one seeded minute inside [soft_start, soft_end] (needs localDate for the
+// seed). The lookback tolerates cron jitter / a brief outage; the notification_log
+// stops any slot from firing twice.
 export function dueSlots(
   activity: ReminderActivity,
   nowMinutes: number,
-  lookbackMins: number
+  lookbackMins: number,
+  localDate: string
 ): number[] {
   const inWindow = (m: number) => m <= nowMinutes && m > nowMinutes - lookbackMins
 
@@ -115,6 +131,17 @@ export function dueSlots(
     return slots
   }
 
+  if (activity.reminder_type === "random") {
+    // Fires once at a minute derived from (activity.id, localDate) inside the
+    // soft window. Deterministic → every tick this day computes the same slot, so
+    // the notification_log unique key dedupes it exactly like strict.
+    const start = parseHHMM(activity.soft_start)
+    const end = parseHHMM(activity.soft_end)
+    if (start === null || end === null || start > end) return []
+    const m = start + (hash32(`${activity.id}|${localDate}`) % (end - start + 1))
+    return inWindow(m) ? [m] : []
+  }
+
   return []
 }
 
@@ -128,7 +155,9 @@ export function buildPayload(
   const body =
     activity.reminder_type === "strict"
       ? `It's ${formatHHMM(slotMinutes)}. You said you would.`
-      : `Still on the list. It's on you.`
+      : activity.reminder_type === "random"
+        ? `Surprise. It's time.`
+        : `Still on the list. It's on you.`
   return {
     title: activity.name,
     body,

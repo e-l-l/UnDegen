@@ -1,0 +1,16 @@
+-- 0008 — add the 'random' reminder subtype.
+--
+-- A 'random' reminder fires ONCE at a seeded-random minute inside a window. It
+-- reuses the soft window columns: soft_start/soft_end are the window bounds and
+-- soft_interval_mins stays null. No new columns and no CHECK change — the
+-- existing reminder_config_only_on_reminder constraint only nulls-off config on
+-- non-reminders, so soft_* are already permitted on any reminder row.
+--
+-- The fire minute is derived on read by the send-notifications function
+-- (deterministic hash of activity_id + local_date), never stored — same
+-- poll-and-compute model as strict/soft (ADR 0001 / 0003).
+--
+-- Postgres note: a value added by ALTER TYPE ... ADD VALUE cannot be USED in the
+-- same transaction that adds it. This migration only adds the label (nothing here
+-- uses it), so a standalone statement is safe. IF NOT EXISTS keeps it re-runnable.
+alter type reminder_type add value if not exists 'random';

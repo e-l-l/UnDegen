@@ -38,6 +38,12 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
 
   const isStrict = type === "reminder" && reminderType === "strict"
   const isSoft = type === "reminder" && reminderType === "soft"
+  // 'random' fires once at a seeded time inside a window — reuses the soft
+  // window (soft_start/soft_end) but has no interval.
+  const isRandom = type === "reminder" && reminderType === "random"
+  // soft + random both store their bounds in soft_start/soft_end; only soft
+  // also carries an interval.
+  const usesSoftWindow = isSoft || isRandom
 
   // A reminder that starts today can't fire earlier than now; a future start
   // date lifts the floor entirely (undefined = no restriction). Shared by the
@@ -52,8 +58,8 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
       if (!strictTime) next.strictTime = "Pick a time"
       else if (reminderMinTime && strictTime < reminderMinTime) next.strictTime = "That time's already passed"
     }
-    if (isSoft) {
-      if (!softIntervalMins || softIntervalMins <= 0) next.softWindow = "Pick an interval"
+    if (usesSoftWindow) {
+      if (isSoft && (!softIntervalMins || softIntervalMins <= 0)) next.softWindow = "Pick an interval"
       else if (softStart >= softEnd) next.softWindow = "Until must be after From"
       else if (reminderMinTime && softStart < reminderMinTime) next.softWindow = "That window's already started"
     }
@@ -75,8 +81,8 @@ export function useNewActivityForm(userId: string, onCreated: (type: ActivityTyp
         recurrence_start: recurrenceStart,
         reminder_type: type === "reminder" ? reminderType : null,
         strict_time: isStrict ? strictTime : null,
-        soft_start: isSoft ? softStart : null,
-        soft_end: isSoft ? softEnd : null,
+        soft_start: usesSoftWindow ? softStart : null,
+        soft_end: usesSoftWindow ? softEnd : null,
         soft_interval_mins: isSoft ? softIntervalMins : null,
         default_mode: type === "long_task" ? defaultMode : null,
         goal_duration_mins: type === "long_task" && defaultMode === "goal" ? goalDurationMins : null,

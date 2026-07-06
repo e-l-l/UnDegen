@@ -5,6 +5,7 @@ import {
   buildPayload,
   dueSlots,
   formatHHMM,
+  hash32,
   localContext,
   parseHHMM,
   recursOn,
@@ -72,12 +73,16 @@ Deno.test("recursOn skips a date in exception_dates (delete this day only)", () 
   assertEquals(recursOn(a, { date: "2021-01-08", minutes: 0, weekday: 5 }), false)
 })
 
+// dueSlots takes a localDate (used only by the 'random' seed); strict/soft ignore
+// it, so any placeholder date is fine for those cases.
+const D = "2021-01-01"
+
 Deno.test("dueSlots strict: single fire inside the lookback window", () => {
   const a = reminder({ reminder_type: "strict", strict_time: "08:00" })
-  assertEquals(dueSlots(a, 480, 12), [480]) // exactly now
-  assertEquals(dueSlots(a, 481, 12), [480]) // 1 min late — still caught
-  assertEquals(dueSlots(a, 495, 12), []) // 15 min late — outside window
-  assertEquals(dueSlots(a, 479, 12), []) // not yet due
+  assertEquals(dueSlots(a, 480, 12, D), [480]) // exactly now
+  assertEquals(dueSlots(a, 481, 12, D), [480]) // 1 min late — still caught
+  assertEquals(dueSlots(a, 495, 12, D), []) // 15 min late — outside window
+  assertEquals(dueSlots(a, 479, 12, D), []) // not yet due
 })
 
 Deno.test("dueSlots soft: nudge slots across the window", () => {
@@ -87,10 +92,10 @@ Deno.test("dueSlots soft: nudge slots across the window", () => {
     soft_interval_mins: 60,
     soft_end: "12:00",
   })
-  assertEquals(dueSlots(a, 540, 12), [540]) // 09:00 slot
-  assertEquals(dueSlots(a, 601, 12), [600]) // 10:00 slot, caught 1 min late
-  assertEquals(dueSlots(a, 725, 12), [720]) // 12:00 end slot included
-  assertEquals(dueSlots(a, 800, 12), []) // past the window
+  assertEquals(dueSlots(a, 540, 12, D), [540]) // 09:00 slot
+  assertEquals(dueSlots(a, 601, 12, D), [600]) // 10:00 slot, caught 1 min late
+  assertEquals(dueSlots(a, 725, 12, D), [720]) // 12:00 end slot included
+  assertEquals(dueSlots(a, 800, 12, D), []) // past the window
 })
 
 Deno.test("dueSlots soft: multiple slots can land in one window", () => {
@@ -100,18 +105,52 @@ Deno.test("dueSlots soft: multiple slots can land in one window", () => {
     soft_interval_mins: 5,
     soft_end: "11:00",
   })
-  assertEquals(dueSlots(a, 610, 12), [600, 605, 610])
+  assertEquals(dueSlots(a, 610, 12, D), [600, 605, 610])
 })
 
 Deno.test("dueSlots soft: invalid config yields nothing (no infinite loop)", () => {
   assertEquals(
-    dueSlots(reminder({ reminder_type: "soft", soft_start: "09:00", soft_interval_mins: 0, soft_end: "12:00" }), 600, 12),
+    dueSlots(reminder({ reminder_type: "soft", soft_start: "09:00", soft_interval_mins: 0, soft_end: "12:00" }), 600, 12, D),
     []
   )
   assertEquals(
-    dueSlots(reminder({ reminder_type: "soft", soft_start: "12:00", soft_interval_mins: 30, soft_end: "09:00" }), 600, 12),
+    dueSlots(reminder({ reminder_type: "soft", soft_start: "12:00", soft_interval_mins: 30, soft_end: "09:00" }), 600, 12, D),
     []
   )
+})
+
+Deno.test("dueSlots random: fires once at a seeded minute inside the window", () => {
+  const start = 540, end = 1020 // 09:00–17:00
+  const a = reminder({ reminder_type: "random", soft_start: "09:00", soft_end: "17:00" })
+  const date = "2026-07-06"
+  // The scheduler derives this exact minute from (id, date) — recompute it here.
+  const m = start + (hash32(`${a.id}|${date}`) % (end - start + 1))
+  assertEquals(m >= start && m <= end, true) // inside the window
+
+  assertEquals(dueSlots(a, m, 12, date), [m]) // fires at its minute
+  assertEquals(dueSlots(a, m, 12, date), [m]) // stable: same slot every tick that day
+  assertEquals(dueSlots(a, m + 1, 12, date), [m]) // caught 1 min late
+  assertEquals(dueSlots(a, m + 13, 12, date), []) // past the lookback
+  assertEquals(dueSlots(a, m - 1, 12, date), []) // not yet due
+})
+
+Deno.test("dueSlots random: the minute varies by date", () => {
+  const a = reminder({ reminder_type: "random", soft_start: "00:00", soft_end: "23:59" })
+  const days = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05"]
+  const mins = new Set(days.map((d) => hash32(`${a.id}|${d}`) % 1440))
+  assertEquals(mins.size > 1, true) // not a constant — the seed actually moves it
+})
+
+Deno.test("dueSlots random: degenerate + invalid windows", () => {
+  // start == end → that one minute
+  const point = reminder({ reminder_type: "random", soft_start: "08:00", soft_end: "08:00" })
+  assertEquals(dueSlots(point, 480, 12, D), [480])
+  // start > end → nothing (defensive; the form blocks this)
+  const bad = reminder({ reminder_type: "random", soft_start: "17:00", soft_end: "09:00" })
+  assertEquals(dueSlots(bad, 600, 12, D), [])
+  // unparseable window → nothing
+  const nul = reminder({ reminder_type: "random", soft_start: null, soft_end: "17:00" })
+  assertEquals(dueSlots(nul, 600, 12, D), [])
 })
 
 Deno.test("buildPayload: dry copy + occurrence tag", () => {
@@ -122,4 +161,7 @@ Deno.test("buildPayload: dry copy + occurrence tag", () => {
 
   const soft = buildPayload(reminder({ reminder_type: "soft" }), 600, "2026-07-04")
   assertEquals(soft.body, "Still on the list. It's on you.")
+
+  const random = buildPayload(reminder({ reminder_type: "random" }), 780, "2026-07-04")
+  assertEquals(random.body, "Surprise. It's time.")
 })

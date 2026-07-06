@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
       ctxByTz.set(tz, ctx)
     }
     if (!recursOn(a, ctx)) continue
-    for (const slot of dueSlots(a, ctx.minutes, LOOKBACK_MINS)) {
+    for (const slot of dueSlots(a, ctx.minutes, LOOKBACK_MINS, ctx.date)) {
       due.push({ activity: a, localDate: ctx.date, slot })
     }
   }

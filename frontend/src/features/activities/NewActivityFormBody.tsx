@@ -54,6 +54,8 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
               error={form.errors.strictTime}
             />
           ) : (
+            // soft + random share the From/Until window; random fires once at a
+            // hidden time inside it, so only soft adds the interval chips.
             <>
               <SoftWindowFields
                 start={form.softStart}
@@ -63,18 +65,20 @@ export function NewActivityFormBody({ form }: { form: NewActivityForm }) {
                 error={form.errors.softWindow}
                 minTime={form.reminderMinTime}
               />
-              <div className="mt-3.5">
-                <SoftIntervalChips
-                  minutes={form.softIntervalMins}
-                  isCustom={form.softIntervalCustom}
-                  onSelectPreset={(m) => {
-                    form.setSoftIntervalCustom(false)
-                    form.setSoftIntervalMins(m)
-                  }}
-                  onSelectCustom={() => form.setSoftIntervalCustom(true)}
-                  onCustomChange={form.setSoftIntervalMins}
-                />
-              </div>
+              {form.reminderType === "soft" && (
+                <div className="mt-3.5">
+                  <SoftIntervalChips
+                    minutes={form.softIntervalMins}
+                    isCustom={form.softIntervalCustom}
+                    onSelectPreset={(m) => {
+                      form.setSoftIntervalCustom(false)
+                      form.setSoftIntervalMins(m)
+                    }}
+                    onSelectCustom={() => form.setSoftIntervalCustom(true)}
+                    onCustomChange={form.setSoftIntervalMins}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

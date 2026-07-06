@@ -5,7 +5,7 @@
 
 // ── Enums (match the Postgres enum types) ────────────────────────────────────
 export type ActivityType = 'reminder' | 'long_task'
-export type ReminderType = 'strict' | 'soft'
+export type ReminderType = 'strict' | 'soft' | 'random'
 export type TaskMode = 'goal' | 'zen'
 export type DayActivitySource = 'recurring' | 'manual'
 export type CompletionStatus = 'done' | 'skipped' | 'missed'
@@ -26,6 +26,8 @@ export interface Activity {
   // reminder-specific (null when type === 'long_task')
   reminder_type?: ReminderType | null
   strict_time?: string | null // 'HH:MM'
+  // soft_start/soft_end double as the window bounds when reminder_type === 'random'
+  // (fires once at a seeded-random minute inside them); soft_interval_mins is then null.
   soft_start?: string | null // 'HH:MM'
   soft_interval_mins?: number | null
   soft_end?: string | null // 'HH:MM'

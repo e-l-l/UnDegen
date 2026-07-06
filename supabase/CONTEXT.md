@@ -19,6 +19,7 @@ The cloud backend. There is **no custom server** — the app talks to Supabase d
 - `migrations/0005_notification_grants.sql` — grants `select/insert/update/delete` on the three `0003` tables to `authenticated` + `service_role`. **`0003` created RLS policies but no table grants**, and PostgREST checks the base-table grant *before* RLS — so every client write 403'd and the service-role function couldn't read them (a real prod incident; the `0001` tables got grants via Supabase's default-privilege auto-grant, `0003` didn't). RLS still scopes rows to their owner. **New envs: apply after `0003`.**
 - `migrations/0006_service_role_read_grants.sql` — grants `service_role` **SELECT** on `activities` / `days` / `day_activities` / `completions`. Same failure class as `0005`, different tables: the alarm reads these as `service_role`, but only `authenticated` had SELECT — so `from("activities").select(...)` was denied, the handler swallowed the error (`data ?? []`), `due` came back empty, and every tick returned `{"sent":0}` with an empty `notification_log`. **Second real prod incident** — reminders never fired. SELECT only (the function never writes these). **New envs: apply after `0001`.**
 - `migrations/0007_activity_exception_dates.sql` — adds `activities.exception_dates date[] not null default '{}'`: **single-occurrence removal** ("delete this day only"). A local date in the array is skipped by the recurrence expansion without touching the rule or archiving. Evaluated per-user against the *local* date in both `recursOn`s (app + function), never as a server-side `WHERE` (each user's "today" differs). **New envs: apply after `0001`.**
+- `migrations/0008_reminder_type_random.sql` — adds `'random'` to the `reminder_type` enum: a **single-fire reminder at a seeded-random minute inside a window**. Reuses `soft_start`/`soft_end` as the window bounds (`soft_interval_mins` stays null) — **no new columns and no CHECK change** (`reminder_config_only_on_reminder` only nulls-off config on non-reminders, so `soft_*` are already allowed on any reminder). Standalone `ALTER TYPE … ADD VALUE IF NOT EXISTS` — the value is used by nothing in-file, so Postgres's "a new enum value can't be used in the txn that adds it" rule doesn't bite. **New envs: apply after `0001`.**
 - `functions/send-notifications/` — the Web Push sender (Deno). `index.ts` (handler) + `schedule.ts` (pure due-ness/slot logic, mirrors the frontend's `recurrence.ts` — its `recursOn` skips a date in `exception_dates`, and `index.ts` already filters `archived = false` in the activities query) + `schedule.test.ts` (`deno test`).
 
 ## What the schema encodes
@@ -76,9 +77,13 @@ Dexie/`syncQueue`) and read only by the function (service-role). Still RLS owner
 **Glossary** (shared with the frontend recurrence model):
 - **alarm** — the server-side trigger (this function + cron).
 - **occurrence** — a derived instance of a recurring activity on a date (`recursOn`).
-- **slot** — the wall-clock minute a notification is due (a `strict_time`, or one soft nudge);
-  the idempotency unit `(activity_id, local_date, slot)`.
+- **slot** — the wall-clock minute a notification is due (a `strict_time`, one soft nudge, or a
+  `random` reminder's seeded minute); the idempotency unit `(activity_id, local_date, slot)`.
 - **nudge** — a single soft-reminder firing; a soft reminder emits many across its window.
+- **random reminder** — fires **once** at a minute derived from `hash32(activity_id + local_date)`
+  inside `[soft_start, soft_end]` (`schedule.ts` `dueSlots`). Deterministic per (activity, day) so
+  every tick computes the same slot and `notification_log` dedupes it exactly like a strict slot;
+  unpredictable to the user (surprise). Never stored — same derive-on-read model as strict/soft.
 
 **Deploying the function (CLI):** `supabase link --project-ref <ref>` →
 `supabase functions deploy send-notifications` → `supabase secrets set VAPID_PUBLIC_KEY=…
@@ -90,6 +95,7 @@ VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:… CRON_SECRET=…` (generate VAPID 
 
 - One numbered SQL file per change (`0001_`, `0002_`, …). Never edit a migration that has already been applied to a real environment — add a new one.
 - Wrap DDL in `begin`/`commit`.
+- **Adding an enum value** uses `alter type <enum> add value [if not exists] '<v>'` — keep it in its **own** migration and don't use the new value elsewhere in the same file: Postgres forbids using a value in the transaction that adds it (`0008` adds `reminder_type` = `'random'` and does nothing else).
 - Schema changes here **must** be mirrored in `frontend/src/db/types.ts` (interfaces) and, if indexes/uniqueness change, `frontend/src/db/db.ts`. Local Dexie and cloud Postgres are kept in lockstep.
 
 ## Not yet here (planned — see CLAUDE.md Open Questions)
