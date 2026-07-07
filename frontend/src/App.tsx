@@ -4,6 +4,7 @@ import { AuthScreen } from "@/features/auth/AuthScreen"
 import { StatsDetailScreen } from "@/features/stats/StatsDetailScreen"
 import { StatsScreen } from "@/features/stats/StatsScreen"
 import { FocusScreen } from "@/features/today/FocusScreen"
+import { SelectedDayProvider } from "@/features/today/SelectedDayProvider"
 import { TodayScreen } from "@/features/today/TodayScreen"
 import { YouScreen } from "@/features/you/YouScreen"
 import { useSession } from "@/hooks/useSession"
@@ -22,14 +23,19 @@ function SignedInApp({ userId }: { userId: string }) {
   useReconcileNotifications(userId)
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/today" element={<TodayScreen userId={userId} />} />
-        <Route path="/focus" element={<FocusScreen userId={userId} />} />
-        <Route path="/stats" element={<StatsScreen userId={userId} />} />
-        <Route path="/stats/:activityId" element={<StatsDetailScreen userId={userId} />} />
-        <Route path="/you" element={<YouScreen userId={userId} />} />
-        <Route path="*" element={<Navigate to="/today" replace />} />
-      </Routes>
+      {/* SelectedDayProvider lives above Routes so the day switcher's viewed day
+          survives tabbing between /today and /focus (each screen unmounts on
+          route change); it resets to today on cold start. */}
+      <SelectedDayProvider>
+        <Routes>
+          <Route path="/today" element={<TodayScreen userId={userId} />} />
+          <Route path="/focus" element={<FocusScreen userId={userId} />} />
+          <Route path="/stats" element={<StatsScreen userId={userId} />} />
+          <Route path="/stats/:activityId" element={<StatsDetailScreen userId={userId} />} />
+          <Route path="/you" element={<YouScreen userId={userId} />} />
+          <Route path="*" element={<Navigate to="/today" replace />} />
+        </Routes>
+      </SelectedDayProvider>
       <PWABadge />
     </BrowserRouter>
   )

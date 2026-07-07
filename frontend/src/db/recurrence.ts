@@ -18,6 +18,22 @@ export function weekdayOf(date: string): number {
   return parseLocalDate(date).getDay()
 }
 
+// `date` shifted by `n` calendar days (n may be negative), as YYYY-MM-DD.
+// setDate handles month/year rollover; todayLocal reformats back to a local
+// string. The day-switcher stepper and its ±window bounds build on this.
+export function addDays(date: string, n: number): string {
+  const d = parseLocalDate(date)
+  d.setDate(d.getDate() + n)
+  return todayLocal(d)
+}
+
+// "Mon D" (e.g. "Jul 7") in the user's locale — the shared month/day label the
+// Today/Focus headers show. Takes a Date so callers can pass the live clock or a
+// parsed viewed-day string.
+export function formatMonthDay(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
 // Mon=0..Sun=6 (design week order) from JS getDay() (0=Sun..6=Sat). Doubles as
 // "days since Monday", so subtracting it snaps a date back to its week's Monday.
 export const mondayIndex = (jsDay: number): number => (jsDay + 6) % 7

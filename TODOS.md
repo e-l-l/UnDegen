@@ -1,4 +1,4 @@
 - Day switcher on today view, to see other days - think google calendar like
-- implement notifications
 - u dont HAVE to opt to repeat, allow 1 time
-- random mode reminder
+- stat hovers
+- logo

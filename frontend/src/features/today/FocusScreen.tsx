@@ -5,12 +5,15 @@ import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { getDayItems } from "@/db/dayView"
-import { todayLocal } from "@/db/recurrence"
+import { formatMonthDay, parseLocalDate } from "@/db/recurrence"
 import { completeWorkSession, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
+import { DaySwitcher } from "./DaySwitcher"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
 import { NewActivityFlow } from "./NewActivityFlow"
+import { useSelectedDay } from "./selectedDay"
+import { relativeTitle } from "./useTodayData"
 
 interface FocusScreenProps {
   userId: string
@@ -42,12 +45,13 @@ function useIsDesktop() {
 // re-render for data this screen would discard. Writes go through repo.ts.
 export function FocusScreen({ userId }: FocusScreenProps) {
   const isDesktop = useIsDesktop()
-  const today = todayLocal()
-  const items = useLiveQuery(() => getDayItems(userId, today), [userId, today])
+  const { selectedDate, isToday, realToday } = useSelectedDay()
+  const items = useLiveQuery(() => getDayItems(userId, selectedDate), [userId, selectedDate])
   const [creatingActivity, setCreatingActivity] = useState(false)
 
   const startSession = (activityId: string) => {
-    void startWorkSession(userId, today, activityId)
+    if (!isToday) return // review-only off-today
+    void startWorkSession(userId, selectedDate, activityId)
   }
   const stopSession = (session: WorkSession) => {
     void completeWorkSession(session)
@@ -69,18 +73,35 @@ export function FocusScreen({ userId }: FocusScreenProps) {
 
   if (isDesktop) return <Navigate to="/today" replace />
 
+  const monthDay = formatMonthDay(parseLocalDate(selectedDate))
+
+  // Empty timeline: today gets the create-oriented prompt; a review-only day gets
+  // a calm single line, no CTA (can't act on another day).
+  const emptyState = isToday ? (
+    <FocusEmptyState onCreate={() => setCreatingActivity(true)} />
+  ) : (
+    <div className="mt-16 text-center text-[14px] text-ink-muted">
+      {selectedDate < realToday ? "Nothing logged that day." : "Nothing planned yet."}
+    </div>
+  )
+
   return (
     <>
       <div className="flex h-svh flex-col bg-background">
         <div className="shrink-0 px-5.5 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2">
-          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">Focus</div>
-          <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-ink">Long tasks</div>
+          <div className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
+            {isToday ? "Focus" : `${relativeTitle(selectedDate, realToday)} · ${monthDay}`}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="text-[30px] font-semibold tracking-[-0.02em] text-ink">Long tasks</div>
+            <DaySwitcher />
+          </div>
           <div className="mt-1.5 text-[14px] text-ink-muted">Needs a focus session, not a checkbox</div>
         </div>
 
         <div className="flex-1 overflow-auto px-5.5 pt-3.5 pb-2">
           {items === undefined ? null : ordered.length === 0 ? (
-            <FocusEmptyState onCreate={() => setCreatingActivity(true)} />
+            emptyState
           ) : (
             <div className="flex flex-col gap-3.5">
               {ordered.map((item) => (
@@ -90,7 +111,8 @@ export function FocusScreen({ userId }: FocusScreenProps) {
                   onStart={() => startSession(item.activity.id)}
                   onStop={stopSession}
                   userId={userId}
-                  date={today}
+                  date={selectedDate}
+                  readOnly={!isToday}
                 />
               ))}
             </div>

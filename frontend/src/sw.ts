@@ -68,6 +68,9 @@ self.addEventListener('notificationclick', (event) => {
     for (const client of windows) {
       if ('focus' in client) {
         await client.focus()
+        // App is already open: focusing won't reset the day switcher's viewed day,
+        // so tell the client to snap back to today (SelectedDayProvider listens).
+        client.postMessage({ type: 'notification-click', url })
         return
       }
     }
