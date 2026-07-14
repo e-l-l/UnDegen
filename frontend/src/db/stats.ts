@@ -275,12 +275,28 @@ function focusTrend(l: Loaded, activityId?: string): { mins: number }[] {
   }))
 }
 
-// buckets[weekday 0=Mon..6=Sun][hour 0..23] = minutes, from completed sessions
+// buckets[weekday 0=Mon..6=Sun][hour 0..23] = minutes, from completed sessions.
+// Minutes are SPREAD across every wall-clock hour the session actually spanned
+// (start → start+total_secs), not dumped into the start hour — a noon→4pm session
+// fills 12/1/2/3pm rather than spiking at noon and leaving the rest empty. Walks
+// hour boundaries, so it rolls weekday at midnight (a late-night session lands on
+// both days) and stays DST-safe. Summed minutes are unchanged — still exactly the
+// focus-trend/amount total, just distributed instead of point-massed.
 function heatmapBuckets(facts: SessionFact[]): number[][] {
   const b = Array.from({ length: 7 }, () => Array(24).fill(0))
   for (const f of facts) {
-    const d = new Date(f.startedAt)
-    b[mondayIndex(d.getDay())][d.getHours()] += f.secs / 60
+    let remaining = f.secs
+    let cursor = new Date(f.startedAt).getTime()
+    while (remaining > 0) {
+      const cur = new Date(cursor)
+      const nextHour = new Date(cursor)
+      nextHour.setMinutes(0, 0, 0)
+      nextHour.setHours(nextHour.getHours() + 1)
+      const slice = Math.min(remaining, (nextHour.getTime() - cursor) / 1000)
+      b[mondayIndex(cur.getDay())][cur.getHours()] += slice / 60
+      cursor += slice * 1000
+      remaining -= slice
+    }
   }
   return b
 }

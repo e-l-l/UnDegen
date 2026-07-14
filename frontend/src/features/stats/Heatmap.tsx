@@ -6,8 +6,9 @@ import { useEffect, useId, useRef, useState } from "react"
 // across the full 24h day (12a→11p) — night-owl sessions render, not clipped.
 // The one sanctioned heavy use of pink: intensity is a
 // data signal. Reused at both scopes (aggregate on /stats, single-activity on
-// /stats/:id) — takes a buckets[7][24] prop (minutes; local start hour of
-// long-task sessions, all-time, incl. archived).
+// /stats/:id) — takes a buckets[7][24] prop (minutes of long-task
+// focus, spread across every local wall-clock hour each session spanned,
+// all-time, incl. archived).
 
 interface HeatmapProps {
   buckets: number[][] // [weekday 0=Mon..6=Sun][hour 0..23] = minutes
