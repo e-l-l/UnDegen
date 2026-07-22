@@ -194,6 +194,16 @@ async function findDayActivity(
   return db.day_activities.where("[day_id+activity_id]").equals([day.id, activityId]).first()
 }
 
+async function findActiveWorkSession(userId: string, activityId: string): Promise<WorkSession | undefined> {
+  const sessions = await db.work_sessions.where("status").equals("in_progress").toArray()
+  for (const session of sessions) {
+    const da = await db.day_activities.get(session.day_activity_id)
+    if (!da || da.activity_id !== activityId) continue
+    const day = await db.days.get(da.day_id)
+    if (day?.user_id === userId) return session
+  }
+}
+
 // Undo a reminder's completion for a date: delete its completion row so the
 // instance reverts to not-done (no "not_done" status exists — absence is the
 // state; "missed" stays derived, see ADR 0001). No-op if nothing's marked.
@@ -224,6 +234,9 @@ export async function startWorkSession(
   date: string,
   activityId: string
 ): Promise<WorkSession> {
+  const active = await findActiveWorkSession(userId, activityId)
+  if (active) return active
+
   const da = await ensureDayActivity(userId, date, activityId)
   const activity = await db.activities.get(activityId)
   const row: WorkSession = {

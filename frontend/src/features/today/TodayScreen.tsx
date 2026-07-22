@@ -186,7 +186,6 @@ export function TodayScreen({ userId }: TodayScreenProps) {
                   onStart={() => startSession(item.activity.id)}
                   onStop={stopSession}
                   userId={userId}
-                  date={selectedDate}
                   readOnly={!isToday}
                 />
               ))}

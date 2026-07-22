@@ -11,7 +11,6 @@ interface LongTaskCardProps {
   onStart: () => void
   onStop: (session: WorkSession) => void
   userId: string
-  date: string
   // Review-only (non-today) day: a read-only per-day summary, never a live timer
   // or Start. No TaskActions wrapper (no kebab/delete) — the day is read-only.
   readOnly?: boolean
@@ -27,7 +26,7 @@ interface LongTaskCardProps {
 // card omits the visible kebab — its bordered "In session" pill owns the header's
 // right edge, so delete falls to the shared right-click / long-press context menu
 // (still wired via the TaskActions wrapper, independent of the kebab).
-export function LongTaskCard({ item, onStart, onStop, userId, date, readOnly }: LongTaskCardProps) {
+export function LongTaskCard({ item, onStart, onStop, userId, readOnly }: LongTaskCardProps) {
   const { activity, sessions } = item
 
   if (readOnly) return <ReadOnlyLongTaskCard item={item} />
@@ -35,7 +34,7 @@ export function LongTaskCard({ item, onStart, onStop, userId, date, readOnly }: 
   const active = sessions.find((s) => s.status === "in_progress")
 
   return (
-    <TaskActions activity={activity} date={date} userId={userId}>
+    <TaskActions activity={activity} date={item.date} userId={userId}>
       {(kebab) => (
         <div className="group">
           {active ? (

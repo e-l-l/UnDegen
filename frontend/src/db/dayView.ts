@@ -16,6 +16,10 @@ export type DayItemState = "done" | "skipped" | "missed" | "pending"
 
 export interface DayItem {
   activity: Activity
+  // Calendar date that owns this materialised occurrence. Usually this is the
+  // requested view date, but a still-running prior-day session floats onto real
+  // today so it can be finished after midnight.
+  date: string
   dayActivity?: DayActivity
   completion?: Completion
   sessions: WorkSession[]
@@ -71,11 +75,17 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
   }
   const daByActivity = new Map(dayActs.map((da) => [da.activity_id, da]))
 
-  const build = (activity: Activity, da: DayActivity | undefined, source: DayActivitySource): DayItem => {
+  const build = (
+    activity: Activity,
+    itemDate: string,
+    da: DayActivity | undefined,
+    source: DayActivitySource
+  ): DayItem => {
     const completion = da ? completionByDa.get(da.id) : undefined
     const sessions = da ? (sessionsByDa.get(da.id) ?? []) : []
     return {
       activity,
+      date: itemDate,
       dayActivity: da,
       completion,
       sessions,
@@ -88,16 +98,58 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
   const items: DayItem[] = []
   const seen = new Set<string>()
   for (const activity of dueActivities) {
-    items.push(build(activity, daByActivity.get(activity.id), "recurring"))
+    items.push(build(activity, date, daByActivity.get(activity.id), "recurring"))
     seen.add(activity.id)
   }
   for (const da of dayActs) {
     if (seen.has(da.activity_id)) continue
     const activity = await db.activities.get(da.activity_id)
-    if (activity) items.push(build(activity, da, da.source))
+    if (activity) items.push(build(activity, date, da, da.source))
   }
 
-  // 4. Stable order by the activity's global position.
+  // 4. Real today also surfaces still-running sessions that started on an
+  // earlier materialised occurrence. The session remains owned by its start
+  // date for history/stats; this just keeps the live control visible after
+  // midnight.
+  if (date === today) {
+    const activeSessions = await db.work_sessions.where("status").equals("in_progress").toArray()
+    const activeByActivity = new Map<string, DayItem>()
+
+    for (const session of activeSessions) {
+      const da = await db.day_activities.get(session.day_activity_id)
+      if (!da) continue
+      const ownerDay = await db.days.get(da.day_id)
+      if (!ownerDay || ownerDay.user_id !== userId || ownerDay.date >= date) continue
+      const activity = await db.activities.get(da.activity_id)
+      if (!activity || activity.user_id !== userId || activity.type !== "long_task" || activity.archived) continue
+
+      const existing = activeByActivity.get(activity.id)
+      if (existing) {
+        existing.sessions.push(session)
+        continue
+      }
+
+      activeByActivity.set(activity.id, {
+        activity,
+        date: ownerDay.date,
+        dayActivity: da,
+        sessions: [session],
+        source: da.source,
+        state: deriveState(activity, ownerDay.date, today, undefined, [session]),
+      })
+    }
+
+    for (const active of activeByActivity.values()) {
+      const idx = items.findIndex((item) => item.activity.id === active.activity.id)
+      if (idx >= 0) {
+        items[idx] = active
+      } else {
+        items.push(active)
+      }
+    }
+  }
+
+  // 5. Stable order by the activity's global position.
   items.sort((a, b) => a.activity.position - b.activity.position)
   return items
 }

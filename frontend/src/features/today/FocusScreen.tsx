@@ -111,7 +111,6 @@ export function FocusScreen({ userId }: FocusScreenProps) {
                   onStart={() => startSession(item.activity.id)}
                   onStop={stopSession}
                   userId={userId}
-                  date={selectedDate}
                   readOnly={!isToday}
                 />
               ))}
