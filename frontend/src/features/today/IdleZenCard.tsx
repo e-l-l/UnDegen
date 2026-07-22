@@ -3,8 +3,9 @@ import { useLiveQuery } from "dexie-react-hooks"
 import { Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { getCompletedSessions } from "@/db/taskHistory"
 import { startOfWeekMonday, todayLocal } from "@/db/recurrence"
+import { sessionDaySlices } from "@/db/sessionSlices"
+import { getCompletedSessions } from "@/db/taskHistory"
 import type { Activity } from "@/db/types"
 import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
@@ -36,15 +37,16 @@ export function IdleZenCard({ activity, onStart, menu }: IdleZenCardProps) {
   const maxSecs = Math.max(1, ...recent.map((s) => s.total_secs ?? 0))
   const today = todayLocal()
   const monday = startOfWeekMonday(today) // this calendar week's Monday (design week start)
-  // One pass: format each session's local date once (YYYY-MM-DD, string-comparable),
-  // tally into today and this-week (Mon→now).
+  // One pass: split each session across local day boundaries, then tally into
+  // today and this-week (Mon→now). A yesterday-started/today-ended session should
+  // still show the minutes actually done today.
   let weekSecs = 0
   let todaySecs = 0
   for (const s of sessions ?? []) {
-    const day = todayLocal(new Date(s.started_at))
-    const secs = s.total_secs ?? 0
-    if (day >= monday) weekSecs += secs
-    if (day === today) todaySecs += secs
+    for (const slice of sessionDaySlices(s.started_at, s.total_secs)) {
+      if (slice.date >= monday) weekSecs += slice.secs
+      if (slice.date === today) todaySecs += slice.secs
+    }
   }
 
   return (

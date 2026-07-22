@@ -1,6 +1,15 @@
 import { db } from "./db"
-import { mondayIndex, nowTimeLocal, parseLocalDate, recursOn, startOfWeekMonday, todayLocal, weekdayOf } from "./recurrence"
-import type { Activity, Completion, WorkSession } from "./types"
+import {
+  mondayIndex,
+  nowTimeLocal,
+  parseLocalDate,
+  recursOn,
+  startOfWeekMonday,
+  todayLocal,
+  weekdayOf,
+} from "./recurrence"
+import { sessionDaySlices } from "./sessionSlices"
+import type { Activity, Completion } from "./types"
 import { deltaDir } from "@/features/stats/types"
 import type {
   ActivityStatRow,
@@ -21,8 +30,10 @@ import type {
 // (Mon→today); future days aren't counted as planned (see adherence/reminderTally).
 // The heatmap is all-time. Archived rule: amount stats (focus banked, trend,
 // heatmap) include archived history; rate stats (showed-up ÷ planned, adherence,
-// most-avoided) are active-only. Timestamps are UTC ISO → new Date() renders them
-// device-local, which is what we bucket/display by.
+// most-avoided) are active-only. Completed long-task amount/showed-up buckets are
+// split across local day boundaries, so a session started yesterday still credits
+// the minutes actually done today. Timestamps are UTC ISO → new Date() renders
+// them device-local, which is what we bucket/display by.
 
 const TREND_WEEKS = 8
 const FLAKE_WEEKS = 8
@@ -85,10 +96,9 @@ interface Loaded {
   activities: Activity[]
   // (activity_id|date) → instantiated state for that occurrence
   completionByKey: Map<string, Completion>
-  sessionsByKey: Map<string, WorkSession[]>
   // activity_id → true if it has any completion row (archived-with-history test)
   activitiesWithCompletion: Set<string>
-  // completed sessions with their local date, for amount stats
+  // completed sessions as whole-session facts (heatmap / sparkline / detail)
   facts: SessionFact[]
   // facts pre-grouped by activity_id (sparkline / detail — avoids re-filtering)
   factsByActivity: Map<string, SessionFact[]>
@@ -100,7 +110,7 @@ interface Loaded {
 
 interface SessionFact {
   activityId: string
-  date: string // local calendar date the session was logged under
+  date: string // owner occurrence date; day-bucketed amount stats use sessionDaySlices
   secs: number
   startedAt: string
   goalMet: boolean
@@ -139,7 +149,6 @@ async function load(userId: string): Promise<Loaded> {
     }
   }
 
-  const sessionsByKey = new Map<string, WorkSession[]>()
   const facts: SessionFact[] = []
   const factsByActivity = new Map<string, SessionFact[]>()
   const secsByDate = new Map<string, number>()
@@ -148,10 +157,6 @@ async function load(userId: string): Promise<Loaded> {
     const activityId = activityByDaId.get(s.day_activity_id)
     const date = dateByDaId.get(s.day_activity_id)
     if (!activityId || !date) continue
-    const key = `${activityId}|${date}`
-    const arr = sessionsByKey.get(key) ?? []
-    arr.push(s)
-    sessionsByKey.set(key, arr)
     if (s.status === "completed") {
       const secs = s.total_secs ?? 0
       const fact: SessionFact = { activityId, date, secs, startedAt: s.started_at, goalMet: s.goal_met === true }
@@ -159,13 +164,15 @@ async function load(userId: string): Promise<Loaded> {
       const fa = factsByActivity.get(activityId) ?? []
       fa.push(fact)
       factsByActivity.set(activityId, fa)
-      secsByDate.set(date, (secsByDate.get(date) ?? 0) + secs)
-      let m = secsByActDate.get(activityId)
-      if (!m) {
-        m = new Map()
-        secsByActDate.set(activityId, m)
+      for (const slice of sessionDaySlices(s.started_at, secs)) {
+        secsByDate.set(slice.date, (secsByDate.get(slice.date) ?? 0) + slice.secs)
+        let m = secsByActDate.get(activityId)
+        if (!m) {
+          m = new Map()
+          secsByActDate.set(activityId, m)
+        }
+        m.set(slice.date, (m.get(slice.date) ?? 0) + slice.secs)
       }
-      m.set(date, (m.get(date) ?? 0) + secs)
     }
   }
 
@@ -174,7 +181,6 @@ async function load(userId: string): Promise<Loaded> {
     activities,
     completionByKey,
     activitiesWithCompletion,
-    sessionsByKey,
     facts,
     factsByActivity,
     secsByDate,
@@ -187,8 +193,7 @@ function reminderDone(l: Loaded, activityId: string, date: string): boolean {
   return l.completionByKey.get(`${activityId}|${date}`)?.status === "done"
 }
 function longTaskShowed(l: Loaded, activityId: string, date: string): boolean {
-  const ss = l.sessionsByKey.get(`${activityId}|${date}`) ?? []
-  return ss.some((s) => s.status === "completed" || s.goal_met === true)
+  return l.secsByActDate.get(activityId)?.has(date) === true
 }
 function showedUp(l: Loaded, a: Activity, date: string): boolean {
   return a.type === "reminder" ? reminderDone(l, a.id, date) : longTaskShowed(l, a.id, date)
