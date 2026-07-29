@@ -20,13 +20,13 @@ interface ReminderRowProps {
   // `done`/`skipped` are read off this, not passed as separate booleans.
   // `skipped` is the user's deliberate "Missed it" dismissal (dimmed + struck),
   // distinct from the banned system-`missed` styling; `missed` (derived: past,
-  // never marked) only surfaces in readOnly review mode.
+  // never marked) only surfaces in the off-today layout.
   state: DayItem["state"]
   // Off-today: drop the kebab/context-menu and show the derived state as a calm
   // right-aligned label. Past days may still expose only the done toggle via
-  // canToggle; future days may not.
-  readOnly?: boolean
-  canToggle?: boolean
+  // canToggleCompletion; future days may not.
+  offTodayLayout?: boolean
+  canToggleCompletion?: boolean
 }
 
 // A reminder is only dimmed/checked once actually completed. A reminder whose
@@ -48,8 +48,8 @@ export function ReminderRow({
   date,
   userId,
   state,
-  readOnly,
-  canToggle,
+  offTodayLayout,
+  canToggleCompletion,
 }: ReminderRowProps) {
   const done = state === "done"
   const skipped = state === "skipped"
@@ -109,7 +109,7 @@ export function ReminderRow({
   //   • derived   → past + never marked: FULL opacity "Missed" pill — quiet, not
   //     missed      an alarm (no-punishing rule). Never red, never struck.
   //   • pending   → future: nothing on the right (nothing to act on).
-  if (readOnly) {
+  if (offTodayLayout) {
     const showMissed = skipped || state === "missed"
     return body(
       <div className="flex shrink-0 items-center gap-2.5">
@@ -120,7 +120,7 @@ export function ReminderRow({
             Missed
           </span>
         ) : null}
-        {canToggle && toggle}
+        {canToggleCompletion && toggle}
       </div>,
       {
         time: done ? "text-[#5e5e5e]" : showMissed ? "text-[#6e6e6e]" : "text-[#777777]",

@@ -49,7 +49,7 @@ Everything below is available now — design against it, don't rebuild it.
 - **`ReminderBucket`** = `{ item: DayItem, timeLabel, anchorMinutes }`; `item.state` ∈ `done | skipped | missed | pending`.
 - **`DayItem.sessions`** on a long-task = that day's work sessions (per-day rollup source).
 
-Behavioural invariants to preserve: `dayAccess(selectedDate, realToday)` allows reminder completion writes for past+today and session starts only today. Off-today still passes `readOnly` down to select the flat layout; `canUpdateReminders` independently exposes the past-day done/undo circle. `db/dayView.ts` derives past→`missed` / future→`pending` before a correction exists.
+Behavioural invariants to preserve: `dayAccess(selectedDate, realToday)` allows reminder completion writes for past+today and session starts only today. Off-today passes `offTodayLayout` down to select the flat layout; `canUpdateReminders` independently exposes the past-day done/undo circle. `db/dayView.ts` derives past→`missed` / future→`pending` before a correction exists.
 
 ---
 

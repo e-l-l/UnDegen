@@ -107,7 +107,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             earlier={data.earlier}
             upNext={data.upNext}
             reminders={data.reminders}
-            readOnly={!isToday}
+            offTodayLayout={!isToday}
             canUpdateReminders={access.canUpdateReminders}
             emptyMessage={emptyMessage}
             nowLabel={data.nowLabel}
@@ -168,7 +168,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
               earlier={data.earlier}
               upNext={data.upNext}
               reminders={data.reminders}
-              readOnly={!isToday}
+              offTodayLayout={!isToday}
               canUpdateReminders={access.canUpdateReminders}
               emptyMessage={emptyMessage}
               nowLabel={data.nowLabel}

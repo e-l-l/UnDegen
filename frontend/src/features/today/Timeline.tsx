@@ -8,13 +8,13 @@ import type { ReminderBucket } from "./useTodayData"
 interface TimelineProps {
   earlier: ReminderBucket[]
   upNext: ReminderBucket[]
-  reminders: ReminderBucket[] // flat list rendered when readOnly (off-today)
+  reminders: ReminderBucket[] // flat list rendered in the off-today layout
   nowLabel: string
   // Off-today: render a single flat, time-ordered list — no NOW divider, no
   // Earlier/Up-next headers (there's no "now" inside another day). Rows drop
   // every interactive control except past-day completion corrections (see
   // canUpdateReminders and ReminderRow).
-  readOnly: boolean
+  offTodayLayout: boolean
   // Past reminder rows keep the flat off-today layout but expose their done
   // toggle. Future rows remain fully review-only.
   canUpdateReminders: boolean
@@ -36,7 +36,7 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
     upNext,
     reminders,
     nowLabel,
-    readOnly,
+    offTodayLayout,
     canUpdateReminders,
     emptyMessage,
     onToggleDone,
@@ -59,8 +59,8 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           title={item.activity.name}
           Icon={iconForActivity(item.activity)}
           state={item.state}
-          readOnly={readOnly}
-          canToggle={canUpdateReminders}
+          offTodayLayout={offTodayLayout}
+          canToggleCompletion={canUpdateReminders}
           onToggle={() => onToggleDone(item.activity.id, done)}
           onToggleMissed={() => onToggleMissed(item.activity.id, skipped)}
           activity={item.activity}
@@ -70,7 +70,7 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
       )
     })
 
-  if (readOnly)
+  if (offTodayLayout)
     return reminders.length ? (
       <>{rows(reminders)}</>
     ) : emptyMessage ? (
