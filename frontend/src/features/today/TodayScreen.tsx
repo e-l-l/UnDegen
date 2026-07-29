@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { clearReminder, completeWorkSession, markReminder, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
 import { DaySwitcher } from "./DaySwitcher"
+import { dayAccess } from "./dayAccess"
 import { DesktopIsland } from "./DesktopIsland"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
@@ -20,6 +21,7 @@ interface TodayScreenProps {
 export function TodayScreen({ userId }: TodayScreenProps) {
   const { selectedDate, realToday, isToday } = useSelectedDay()
   const data = useTodayData(userId, selectedDate)
+  const access = dayAccess(selectedDate, realToday)
   const [creatingActivity, setCreatingActivity] = useState(false)
 
   // Off-today empty timeline (pre-history past / empty future) — a calm line,
@@ -56,10 +58,10 @@ export function TodayScreen({ userId }: TodayScreenProps) {
     scrolledRef.current = true
   }, [data.loading, isToday])
 
-  // Writes only ever target real today — other days are review-only (the read-only
-  // UI hides these affordances, and the guard is a belt-and-braces backstop).
+  // Reminder completions can be corrected on past dates. Future dates stay
+  // review-only; the guard backs up the affordance-level restriction.
   const toggleDone = (activityId: string, done: boolean) => {
-    if (!isToday) return
+    if (!access.canUpdateReminders) return
     void (done
       ? clearReminder(userId, selectedDate, activityId)
       : markReminder(userId, selectedDate, activityId, "done"))
@@ -76,7 +78,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
   }
 
   const startSession = (activityId: string) => {
-    if (!isToday) return
+    if (!access.canRunSessions) return
     void startWorkSession(userId, selectedDate, activityId)
   }
 
@@ -106,6 +108,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
             upNext={data.upNext}
             reminders={data.reminders}
             readOnly={!isToday}
+            canUpdateReminders={access.canUpdateReminders}
             emptyMessage={emptyMessage}
             nowLabel={data.nowLabel}
             onToggleDone={toggleDone}
@@ -166,6 +169,7 @@ export function TodayScreen({ userId }: TodayScreenProps) {
               upNext={data.upNext}
               reminders={data.reminders}
               readOnly={!isToday}
+              canUpdateReminders={access.canUpdateReminders}
               emptyMessage={emptyMessage}
               nowLabel={data.nowLabel}
               onToggleDone={toggleDone}

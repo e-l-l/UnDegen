@@ -11,10 +11,13 @@ interface TimelineProps {
   reminders: ReminderBucket[] // flat list rendered when readOnly (off-today)
   nowLabel: string
   // Off-today: render a single flat, time-ordered list — no NOW divider, no
-  // Earlier/Up-next headers (there's no "now" inside another day) — and rows
-  // drop their interactive controls (see ReminderRow). The write callbacks are
-  // still accepted but go unused in this mode.
+  // Earlier/Up-next headers (there's no "now" inside another day). Rows drop
+  // every interactive control except past-day completion corrections (see
+  // canUpdateReminders and ReminderRow).
   readOnly: boolean
+  // Past reminder rows keep the flat off-today layout but expose their done
+  // toggle. Future rows remain fully review-only.
+  canUpdateReminders: boolean
   // Calm line for a review-only day with nothing on it (pre-history past / empty
   // future); read-only, so it's a statement, not a prompt to act.
   emptyMessage?: string
@@ -28,7 +31,19 @@ interface TimelineProps {
 // differ in the surrounding chrome (header, nav, rail), not in how rows
 // render, so unlike the header/nav blocks this isn't duplicated per lg:.
 export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timeline(
-  { earlier, upNext, reminders, nowLabel, readOnly, emptyMessage, onToggleDone, onToggleMissed, userId, date },
+  {
+    earlier,
+    upNext,
+    reminders,
+    nowLabel,
+    readOnly,
+    canUpdateReminders,
+    emptyMessage,
+    onToggleDone,
+    onToggleMissed,
+    userId,
+    date,
+  },
   nowRef
 ) {
   const rows = (buckets: ReminderBucket[]) =>
@@ -45,6 +60,7 @@ export const Timeline = forwardRef<HTMLDivElement, TimelineProps>(function Timel
           Icon={iconForActivity(item.activity)}
           state={item.state}
           readOnly={readOnly}
+          canToggle={canUpdateReminders}
           onToggle={() => onToggleDone(item.activity.id, done)}
           onToggleMissed={() => onToggleMissed(item.activity.id, skipped)}
           activity={item.activity}

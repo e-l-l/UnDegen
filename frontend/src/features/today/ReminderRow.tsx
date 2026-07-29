@@ -22,9 +22,11 @@ interface ReminderRowProps {
   // distinct from the banned system-`missed` styling; `missed` (derived: past,
   // never marked) only surfaces in readOnly review mode.
   state: DayItem["state"]
-  // Review-only (non-today) day: drop the toggle + kebab/context-menu entirely
-  // and show the derived state as a calm right-aligned label instead.
+  // Off-today: drop the kebab/context-menu and show the derived state as a calm
+  // right-aligned label. Past days may still expose only the done toggle via
+  // canToggle; future days may not.
   readOnly?: boolean
+  canToggle?: boolean
 }
 
 // A reminder is only dimmed/checked once actually completed. A reminder whose
@@ -47,6 +49,7 @@ export function ReminderRow({
   userId,
   state,
   readOnly,
+  canToggle,
 }: ReminderRowProps) {
   const done = state === "done"
   const skipped = state === "skipped"
@@ -83,8 +86,23 @@ export function ReminderRow({
     </div>
   )
 
-  // Review-only: no toggle, no kebab/context-menu — a flat row with a calm
-  // right-aligned state. Three treatments (DESIGN_HANDOFF §6 + the hi-fi mock):
+  const toggle = (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={done ? `Mark ${title} not done` : `Mark ${title} done`}
+      className={cn(
+        "flex size-[22px] shrink-0 items-center justify-center rounded-full",
+        done ? "bg-pink" : "border-[1.6px] border-[#383838]"
+      )}
+    >
+      {done && <Check className="size-3 text-on-pink" strokeWidth={3.2} />}
+    </button>
+  )
+
+  // Off-today: no kebab/context-menu — a flat row with a calm right-aligned
+  // state. Past days append the completion toggle; future days remain purely
+  // review-only. Three state treatments (DESIGN_HANDOFF §6 + the hi-fi mock):
   //   • done      → whole-row faded, plain "Done"
   //   • skipped   → whole-row faded + title struck (the deliberate "Missed it"
   //                 dismissal keeps its today treatment), "Missed" pill
@@ -94,13 +112,16 @@ export function ReminderRow({
   if (readOnly) {
     const showMissed = skipped || state === "missed"
     return body(
-      done ? (
-        <span className="shrink-0 text-[12.5px] text-[#6e6e6e] lg:text-[13px]">Done</span>
-      ) : showMissed ? (
-        <span className="shrink-0 rounded-full border border-edge-chip bg-[#181818] px-[9px] py-[3px] text-[11.5px] font-medium text-[#8a8a8a] lg:px-2.5 lg:text-[12px]">
-          Missed
-        </span>
-      ) : null,
+      <div className="flex shrink-0 items-center gap-2.5">
+        {done ? (
+          <span className="text-[12.5px] text-[#6e6e6e] lg:text-[13px]">Done</span>
+        ) : showMissed ? (
+          <span className="rounded-full border border-edge-chip bg-[#181818] px-[9px] py-[3px] text-[11.5px] font-medium text-[#8a8a8a] lg:px-2.5 lg:text-[12px]">
+            Missed
+          </span>
+        ) : null}
+        {canToggle && toggle}
+      </div>,
       {
         time: done ? "text-[#5e5e5e]" : showMissed ? "text-[#6e6e6e]" : "text-[#777777]",
         icon: "text-[#5e5e5e]",
@@ -115,17 +136,7 @@ export function ReminderRow({
         body(
           <>
             {kebab}
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label={done ? `Mark ${title} not done` : `Mark ${title} done`}
-              className={cn(
-                "flex size-[22px] shrink-0 items-center justify-center rounded-full",
-                done ? "bg-pink" : "border-[1.6px] border-[#383838]"
-              )}
-            >
-              {done && <Check className="size-3 text-on-pink" strokeWidth={3.2} />}
-            </button>
+            {toggle}
           </>,
           {
             time: faded ? "text-ink-faint" : "text-ink-dim",

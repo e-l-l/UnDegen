@@ -18,12 +18,12 @@ Settled product decisions (do not re-open):
 
 | | Decision |
 |---|---|
-| Interactivity | Other days are **review-only**. Real today is the only interactive day (no completing/skipping/starting/deleting on other days). |
+| Interactivity | Past reminders allow **done/undo corrections**. Future reminders and every off-today long task remain review-only; skipping, sessions, and deleting are today-only. |
 | Control | **Chevrons only** (`‹ ›`). No calendar-jump, no swipe. |
 | Range | **Real today ±7 days.** Chevrons disable at the bounds. |
 | Home | A **"Today" button**, shown only off-today (the only way back — there's no calendar). |
 | Non-today reminders | **Flat chronological** list. No NOW divider, no Earlier/Up-next headers. |
-| Non-today controls | **Hidden** (no checkbox, no "Missed it", no Start, no kebab, no FAB glow). Global "New Activity" stays. |
+| Non-today controls | Past reminders show only the done/undo circle. Everything else stays hidden (no "Missed it", no Start, no kebab, no FAB glow); future reminders have no control. Global "New Activity" stays. |
 | Non-today long-tasks | Read-only per-day summary: that day's logged time / goal met, or `Planned`. |
 | Header | **Relative title** (Yesterday / Tomorrow / weekday) + neutral `X of Y done`. Eyebrow keeps the full date. |
 | Scope | Both **Today and Focus**; the two share one viewed day. |
@@ -49,7 +49,7 @@ Everything below is available now — design against it, don't rebuild it.
 - **`ReminderBucket`** = `{ item: DayItem, timeLabel, anchorMinutes }`; `item.state` ∈ `done | skipped | missed | pending`.
 - **`DayItem.sessions`** on a long-task = that day's work sessions (per-day rollup source).
 
-Behavioural invariants to preserve: writes only fire when `isToday`; off-today the screens pass `readOnly` down; `db/dayView.ts` already derives past→`missed` / future→`pending`.
+Behavioural invariants to preserve: `dayAccess(selectedDate, realToday)` allows reminder completion writes for past+today and session starts only today. Off-today still passes `readOnly` down to select the flat layout; `canUpdateReminders` independently exposes the past-day done/undo circle. `db/dayView.ts` derives past→`missed` / future→`pending` before a correction exists.
 
 ---
 
@@ -72,7 +72,7 @@ Behavioural invariants to preserve: writes only fire when `isToday`; off-today t
 ## 6. Non-today reminder list (read-only `ReminderRow`)
 
 - One **flat, time-ordered** list. No NOW divider, no section headers.
-- Each row: time (or `RANDOM`), icon, title, and a **calm right-aligned state label** instead of the toggle — `Done` / `Missed` (nothing for `pending`). No checkbox, no kebab, no context-menu.
+- Each row: time (or `RANDOM`), icon, title, and a **calm right-aligned state label** — `Done` / `Missed` (nothing for `pending`). Past rows append the same done/undo circle used today; future rows do not. No kebab or context-menu off-today.
 - `done`/`skipped` rows keep the existing faded (+ strikethrough for skipped) treatment; a **derived `missed`** (past, never marked) shows the label at **full opacity** — quiet, not a failure. Design the exact glyph/label treatment; keep it subdued.
 
 ## 7. Non-today long-task card (`ReadOnlyLongTaskCard.tsx`)

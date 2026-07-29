@@ -9,6 +9,7 @@ import { formatMonthDay, parseLocalDate } from "@/db/recurrence"
 import { completeWorkSession, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
 import { DaySwitcher } from "./DaySwitcher"
+import { dayAccess } from "./dayAccess"
 import { LongTaskCard } from "./LongTaskCard"
 import { MobileTabBar } from "./MobileTabBar"
 import { NewActivityFlow } from "./NewActivityFlow"
@@ -46,11 +47,12 @@ function useIsDesktop() {
 export function FocusScreen({ userId }: FocusScreenProps) {
   const isDesktop = useIsDesktop()
   const { selectedDate, isToday, realToday } = useSelectedDay()
+  const access = dayAccess(selectedDate, realToday)
   const items = useLiveQuery(() => getDayItems(userId, selectedDate), [userId, selectedDate])
   const [creatingActivity, setCreatingActivity] = useState(false)
 
   const startSession = (activityId: string) => {
-    if (!isToday) return // review-only off-today
+    if (!access.canRunSessions) return
     void startWorkSession(userId, selectedDate, activityId)
   }
   const stopSession = (session: WorkSession) => {

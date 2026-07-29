@@ -12,9 +12,10 @@ export interface ReminderBucket {
 
 export interface TodayData {
   loading: boolean
-  // Whether the viewed day is real today. Off-today the screen renders read-only
-  // (see TodayScreen) and uses the flat `reminders` list + `totalCount` rather than
-  // the Earlier/NOW/Up-next split, which only makes sense with "now" inside the day.
+  // Whether the viewed day is real today. Off-today the screen renders the flat
+  // variant (past reminders may still be corrected) and uses `reminders` +
+  // `totalCount` rather than the Earlier/NOW/Up-next split, which only makes
+  // sense with "now" inside the day.
   isToday: boolean
   title: string // relative day label: Today / Yesterday / Tomorrow / weekday
   eyebrow: string
