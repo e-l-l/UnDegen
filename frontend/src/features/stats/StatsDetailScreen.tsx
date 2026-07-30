@@ -98,7 +98,11 @@ function DetailBody({ detail, desktop }: { detail: StatsDetail; desktop: boolean
       <div className="mb-3.5 text-[12px] text-[#5E5E5E]">
         {isLong ? "Last 8 weeks" : "Last 8 weeks · % of planned done"}
       </div>
-      <FocusTrend values={trendValues} height={desktop ? 130 : 100} />
+      <FocusTrend
+        values={trendValues}
+        height={desktop ? 130 : 100}
+        showValueTooltip={isLong}
+      />
 
       {/* long-task: heatmap here (desktop keeps it in the left column too) */}
       {isLong && (
