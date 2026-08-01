@@ -15,11 +15,15 @@
 //
 // NOTE: this is a Deno module (Supabase Edge Function), not part of the Vite
 // frontend build (frontend/tsconfig.app.json includes only `src`). Edit with the
-// Deno LSP (deno.json marks the boundary).
+// Deno LSP (deno.json marks the boundary). Runtime dependencies use explicit
+// npm: specifiers so function-only/Dashboard deploys do not need that import map.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
-import webpush from "web-push"
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import webpush from "npm:web-push@3.6.7"
+import {
+  createClient,
+  type SupabaseClient,
+} from "npm:@supabase/supabase-js@2"
 
 import {
   buildPayload,
