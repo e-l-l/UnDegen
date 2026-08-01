@@ -37,6 +37,18 @@ export function selectActivityRevision(
   return selected
 }
 
+export function groupActivityRevisions(
+  revisions: readonly ActivityRevision[]
+): Map<string, ActivityRevision[]> {
+  const grouped = new Map<string, ActivityRevision[]>()
+  for (const revision of revisions) {
+    const list = grouped.get(revision.activity_id) ?? []
+    list.push(revision)
+    grouped.set(revision.activity_id, list)
+  }
+  return grouped
+}
+
 // Before the immutable original start there is no configuration/occurrence.
 // Rows without revisions use the legacy columns for installed-client compatibility.
 export function resolveActivity(

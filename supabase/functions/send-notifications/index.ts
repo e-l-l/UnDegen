@@ -29,6 +29,7 @@ import {
   type LocalContext,
   recursOn,
   resolveReminderRevision,
+  suppressesNotification,
   type ReminderActivity,
   type ReminderRevision,
 } from "./schedule.ts"
@@ -258,7 +259,7 @@ async function loadCompletedSet(admin: SupabaseClient, due: Due[]): Promise<Set<
   const completions = (compResp.data ?? []) as Array<{ day_activity_id: string; status: string }>
 
   for (const c of completions) {
-    if (c.status !== "done" && c.status !== "skipped") continue
+    if (!suppressesNotification(c.status)) continue
     const da = daById.get(c.day_activity_id)
     if (!da) continue
     const day = dayById.get(da.day_id)

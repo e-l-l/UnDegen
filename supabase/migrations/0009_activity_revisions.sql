@@ -3,6 +3,24 @@
 -- older installed PWAs; new clients resolve this table first.
 begin;
 
+-- Type and original start are stable activity identity, not editable config.
+create or replace function keep_activity_identity_immutable() returns trigger
+language plpgsql as $$
+begin
+  if new.type is distinct from old.type then
+    raise exception 'activity type is immutable';
+  end if;
+  if new.recurrence_start is distinct from old.recurrence_start then
+    raise exception 'activity original start is immutable';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger activities_keep_identity_immutable
+  before update on activities
+  for each row execute function keep_activity_identity_immutable();
+
 create table activity_revisions (
   id                  uuid primary key default gen_random_uuid(),
   activity_id         uuid not null references activities (id) on delete cascade,
@@ -104,6 +122,31 @@ $$;
 create trigger activity_revisions_validate_and_stamp
   before insert or update on activity_revisions
   for each row execute function validate_activity_revision();
+
+-- Whichever same-day revision upsert reaches Postgres last also becomes the
+-- legacy/latest mirror. This keeps older installed PWAs coherent with the
+-- winning revision even when two devices' queued activity/revision writes
+-- interleave across separate PostgREST requests.
+create or replace function mirror_activity_revision() returns trigger
+language plpgsql as $$
+begin
+  update activities set
+    recurrence_days = new.recurrence_days,
+    reminder_type = new.reminder_type,
+    strict_time = new.strict_time,
+    soft_start = new.soft_start,
+    soft_interval_mins = new.soft_interval_mins,
+    soft_end = new.soft_end,
+    default_mode = new.default_mode,
+    goal_duration_mins = new.goal_duration_mins
+  where id = new.activity_id;
+  return new;
+end;
+$$;
+
+create trigger activity_revisions_mirror_latest
+  after insert or update on activity_revisions
+  for each row execute function mirror_activity_revision();
 
 alter table activity_revisions enable row level security;
 

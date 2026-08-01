@@ -28,10 +28,11 @@ original `activities` columns.
   so the last synced save wins.
 - The original configuration columns stay on `activities` as a latest-value mirror.
   New reads prefer revisions and fall back to the mirror when none exists; new
-  writes update both. Removing the mirror is a later installed-client compatibility
-  cleanup.
+  writes update both. A database trigger mirrors the last revision upsert too, so
+  cross-device request interleaving cannot leave old and new PWAs on different
+  winning schedules. Removing the mirror is a later compatibility cleanup.
 - Names are not revised. Renaming intentionally relabels all history. Type and
-  original start remain immutable. Exception dates remain activity-wide and are
+  original start remain immutable in both the UI and a database trigger. Exception dates remain activity-wide and are
   never removed by a later edit.
 - A same-day revision applies to the whole date for recurrence and Stats. Existing
   completion/session rows stay attached. Running sessions retain their snapshotted

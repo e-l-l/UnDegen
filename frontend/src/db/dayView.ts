@@ -1,5 +1,5 @@
 import { db } from "./db"
-import { resolveActivity } from "./activityRevisions"
+import { groupActivityRevisions, resolveActivity } from "./activityRevisions"
 import { recursOn, todayLocal } from "./recurrence"
 import type {
   Activity,
@@ -7,7 +7,6 @@ import type {
   DayActivity,
   DayActivitySource,
   WorkSession,
-  ActivityRevision,
 } from "./types"
 
 // Derived view of a single date (the calendar model — see ADR 0001). Occurrences
@@ -54,12 +53,7 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
   const revisions = activities.length
     ? await db.activity_revisions.where("activity_id").anyOf(activities.map((a) => a.id)).toArray()
     : []
-  const revisionsByActivity = new Map<string, ActivityRevision[]>()
-  for (const revision of revisions) {
-    const list = revisionsByActivity.get(revision.activity_id) ?? []
-    list.push(revision)
-    revisionsByActivity.set(revision.activity_id, list)
-  }
+  const revisionsByActivity = groupActivityRevisions(revisions)
   const resolvedFor = (activity: Activity, itemDate: string) =>
     resolveActivity(activity, revisionsByActivity.get(activity.id) ?? [], itemDate)
   const dueActivities = activities.flatMap((activity) => {

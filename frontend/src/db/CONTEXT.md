@@ -29,7 +29,7 @@ frontend/src/
 ## Things that are non-obvious and load-bearing
 
 - **IDs are app-generated UUIDs** (`crypto.randomUUID()`), not auto-increment. Same UUID is used locally and in Supabase → rows are 1:1 across both stores, so sync needs no id mapping. The **only** auto-increment is `syncQueue.id` (`++id`).
-- **Dexie table property names equal the Supabase table names** (`activities`, `days`, `day_activities`, `completions`, `work_sessions`). This is deliberate: the future sync flush resolves a target table generically from `SyncQueueItem.table` (a `TableName` union). Don't rename one side without the other.
+- **Dexie table property names equal the Supabase table names** (`activities`, `activity_revisions`, `days`, `day_activities`, `completions`, `work_sessions`). The sync flush resolves them generically from `SyncQueueItem.table`; don't rename one side without the other.
 - **Stored objects mirror the JSON shape `supabase-js` returns** — dates/timestamps are ISO strings, `time` columns are `'HH:MM'` strings, `recurrence_days` is `number[]` using JS `Date.getDay()` (0=Sun..6=Sat). Keeping the shapes identical means **zero conversion** between Dexie and Supabase. Preserve this; don't introduce a separate local representation.
 - **The `stores()` string lists indexed fields only** — the full object is still stored regardless. `&` = unique index, `[a+b]` = compound index. Current indexes encode real constraints: `&[user_id+date]` on `days` (one row per date per user), `&[day_id+activity_id]` on `day_activities` (an activity appears at most once per day), `&day_activity_id` on `completions` (one completion per day_activity).
 - **`day_activities` has no `type` field** — inferred via join to `Activity`. Do not add one (drift risk; see CLAUDE.md).

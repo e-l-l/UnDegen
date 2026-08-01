@@ -143,6 +143,10 @@ export function resolveReminderRevision(
   }
 }
 
+export function suppressesNotification(status: string): boolean {
+  return status === "done" || status === "skipped"
+}
+
 // Slot minutes due within the lookback window (nowMinutes - lookback, nowMinutes].
 // strict → the single strict_time. soft → every soft_start + k·interval ≤ soft_end.
 // random → one seeded minute inside [soft_start, soft_end] (needs localDate for the

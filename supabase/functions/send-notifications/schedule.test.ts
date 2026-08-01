@@ -10,6 +10,7 @@ import {
   parseHHMM,
   recursOn,
   resolveReminderRevision,
+  suppressesNotification,
   type ReminderActivity,
   type ReminderRevision,
 } from "./schedule.ts"
@@ -104,6 +105,13 @@ Deno.test("dueSlots does not replay slots at or before a same-day revision save"
   assertEquals(dueSlots(strict, 605, 12, D, 600), [])
   const soft = reminder({ reminder_type: "soft", soft_start: "10:00", soft_interval_mins: 5, soft_end: "10:30" })
   assertEquals(dueSlots(soft, 610, 12, D, 604), [605, 610])
+})
+
+Deno.test("done and skipped suppress remaining notification slots", () => {
+  assertEquals(suppressesNotification("done"), true)
+  assertEquals(suppressesNotification("skipped"), true)
+  assertEquals(suppressesNotification("missed"), false)
+  assertEquals(suppressesNotification("pending"), false)
 })
 
 Deno.test("dueSlots soft: nudge slots across the window", () => {

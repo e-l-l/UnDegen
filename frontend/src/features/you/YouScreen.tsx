@@ -39,11 +39,11 @@ function ActivitiesSection({ count, desktop, onOpen, className }: { count: numbe
   return (
     <section className={className}>
       <div className="mb-3 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-[#5A5A5A]">Activities</div>
-      <button type="button" onClick={onOpen} className={cn("flex w-full items-center gap-3.5 rounded-2xl border border-[#232323] bg-[#141414] text-left transition-colors hover:bg-[#181818]", desktop ? "p-[20px_22px]" : "p-[18px]")}>
+      <Button type="button" variant="ghost" onClick={onOpen} className={cn("h-auto w-full justify-start gap-3.5 rounded-2xl border border-[#232323] bg-[#141414] text-left transition-colors hover:bg-[#181818]", desktop ? "p-[20px_22px]" : "p-[18px]")}>
         <div className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-[#292929] bg-[#1a1a1a]"><ListChecks className="size-5 text-[#888]" strokeWidth={1.7} /></div>
         <div className="min-w-0 flex-1"><div className="text-[15px] font-medium text-[#E4E4E4]">Manage activities</div><div className="mt-1 text-[13px] text-[#6e6e6e]">{activityLine(count)}</div></div>
         <ChevronRight className="size-4.5 text-[#555]" />
-      </button>
+      </Button>
     </section>
   )
 }

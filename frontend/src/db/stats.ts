@@ -1,4 +1,5 @@
 import { db } from "./db"
+import { groupActivityRevisions } from "./activityRevisions"
 import {
   mondayIndex,
   nowTimeLocal,
@@ -128,13 +129,9 @@ async function load(userId: string): Promise<Loaded> {
   ])
   const days = allDays.filter((d) => d.user_id === userId)
   const activityIds = new Set(activities.map((activity) => activity.id))
-  const revisionsByActivity = new Map<string, ActivityRevision[]>()
-  for (const revision of allRevisions) {
-    if (!activityIds.has(revision.activity_id)) continue
-    const list = revisionsByActivity.get(revision.activity_id) ?? []
-    list.push(revision)
-    revisionsByActivity.set(revision.activity_id, list)
-  }
+  const revisionsByActivity = groupActivityRevisions(
+    allRevisions.filter((revision) => activityIds.has(revision.activity_id))
+  )
   const dateByDayId = new Map(days.map((d) => [d.id, d.date]))
   const dayIds = new Set(days.map((d) => d.id))
 
