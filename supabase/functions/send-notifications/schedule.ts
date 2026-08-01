@@ -24,6 +24,24 @@ export interface ReminderActivity {
   exception_dates: string[] // 'YYYY-MM-DD' dates the rule skips ("delete this day only")
 }
 
+export interface ReminderRevision {
+  id: string
+  activity_id: string
+  effective_from: string
+  reminder_type: ReminderKind | null
+  strict_time: string | null
+  soft_start: string | null
+  soft_interval_mins: number | null
+  soft_end: string | null
+  recurrence_days: number[]
+  updated_at: string
+}
+
+export type ResolvedReminderActivity = ReminderActivity & {
+  revision_effective_from?: string
+  revision_updated_at?: string
+}
+
 export interface LocalContext {
   date: string // 'YYYY-MM-DD' in the user's zone
   minutes: number // minutes since local midnight
@@ -99,6 +117,32 @@ export function recursOn(activity: ReminderActivity, ctx: LocalContext): boolean
   )
 }
 
+export function resolveReminderRevision(
+  activity: ReminderActivity,
+  revisions: readonly ReminderRevision[],
+  localDate: string
+): ResolvedReminderActivity | null {
+  if (localDate < activity.recurrence_start) return null
+  let selected: ReminderRevision | undefined
+  for (const revision of revisions) {
+    if (revision.effective_from <= localDate && (!selected || revision.effective_from > selected.effective_from)) {
+      selected = revision
+    }
+  }
+  if (!selected) return activity
+  return {
+    ...activity,
+    recurrence_days: selected.recurrence_days,
+    reminder_type: selected.reminder_type,
+    strict_time: selected.strict_time,
+    soft_start: selected.soft_start,
+    soft_interval_mins: selected.soft_interval_mins,
+    soft_end: selected.soft_end,
+    revision_effective_from: selected.effective_from,
+    revision_updated_at: selected.updated_at,
+  }
+}
+
 // Slot minutes due within the lookback window (nowMinutes - lookback, nowMinutes].
 // strict → the single strict_time. soft → every soft_start + k·interval ≤ soft_end.
 // random → one seeded minute inside [soft_start, soft_end] (needs localDate for the
@@ -108,9 +152,12 @@ export function dueSlots(
   activity: ReminderActivity,
   nowMinutes: number,
   lookbackMins: number,
-  localDate: string
+  localDate: string,
+  notBeforeExclusive?: number
 ): number[] {
-  const inWindow = (m: number) => m <= nowMinutes && m > nowMinutes - lookbackMins
+  const inWindow = (m: number) =>
+    m <= nowMinutes && m > nowMinutes - lookbackMins &&
+    (notBeforeExclusive === undefined || m > notBeforeExclusive)
 
   if (activity.reminder_type === "strict") {
     const s = parseHHMM(activity.strict_time)

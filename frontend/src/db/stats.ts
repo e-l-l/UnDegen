@@ -9,7 +9,7 @@ import {
   weekdayOf,
 } from "./recurrence"
 import { sessionDaySlices } from "./sessionSlices"
-import type { Activity, Completion } from "./types"
+import type { Activity, ActivityRevision, Completion } from "./types"
 import { deltaDir } from "@/features/stats/types"
 import type {
   ActivityStatRow,
@@ -94,6 +94,7 @@ const fmtMonthDay = (d: Date): string => `${MONTHS[d.getMonth()]} ${d.getDate()}
 interface Loaded {
   today: string
   activities: Activity[]
+  revisionsByActivity: Map<string, ActivityRevision[]>
   // (activity_id|date) → instantiated state for that occurrence
   completionByKey: Map<string, Completion>
   // activity_id → true if it has any completion row (archived-with-history test)
@@ -119,12 +120,21 @@ interface SessionFact {
 async function load(userId: string): Promise<Loaded> {
   // These three reads are independent (day_activities is filtered by day_id in
   // memory, not queried on it), so fetch them in one round-trip.
-  const [activities, allDays, allDayActs] = await Promise.all([
+  const [activities, allRevisions, allDays, allDayActs] = await Promise.all([
     db.activities.where("user_id").equals(userId).toArray(),
+    db.activity_revisions.toArray(),
     db.days.toArray(),
     db.day_activities.toArray(),
   ])
   const days = allDays.filter((d) => d.user_id === userId)
+  const activityIds = new Set(activities.map((activity) => activity.id))
+  const revisionsByActivity = new Map<string, ActivityRevision[]>()
+  for (const revision of allRevisions) {
+    if (!activityIds.has(revision.activity_id)) continue
+    const list = revisionsByActivity.get(revision.activity_id) ?? []
+    list.push(revision)
+    revisionsByActivity.set(revision.activity_id, list)
+  }
   const dateByDayId = new Map(days.map((d) => [d.id, d.date]))
   const dayIds = new Set(days.map((d) => d.id))
 
@@ -179,6 +189,7 @@ async function load(userId: string): Promise<Loaded> {
   return {
     today: todayLocal(),
     activities,
+    revisionsByActivity,
     completionByKey,
     activitiesWithCompletion,
     facts,
@@ -198,6 +209,9 @@ function longTaskShowed(l: Loaded, activityId: string, date: string): boolean {
 function showedUp(l: Loaded, a: Activity, date: string): boolean {
   return a.type === "reminder" ? reminderDone(l, a.id, date) : longTaskShowed(l, a.id, date)
 }
+function plannedOn(l: Loaded, a: Activity, date: string): boolean {
+  return recursOn(a, date, wd(date), l.revisionsByActivity.get(a.id) ?? [])
+}
 
 // showed-up ÷ planned over a date window, active activities only (rate stat)
 function adherence(l: Loaded, dates: string[]): { showedUp: number; planned: number } {
@@ -207,7 +221,7 @@ function adherence(l: Loaded, dates: string[]): { showedUp: number; planned: num
     if (a.archived) continue
     for (const date of dates) {
       if (date > l.today) continue // future occurrence — not yet plannable-as-missed
-      if (!recursOn(a, date, wd(date))) continue
+      if (!plannedOn(l, a, date)) continue
       planned++
       if (showedUp(l, a, date)) showed++
     }
@@ -248,7 +262,7 @@ function reminderTally(l: Loaded, a: Activity, dates: string[]): { done: number;
   let planned = 0
   for (const date of dates) {
     if (date > l.today) continue // future occurrence — not yet plannable-as-missed
-    if (!recursOn(a, date, wd(date))) continue
+    if (!plannedOn(l, a, date)) continue
     planned++
     if (reminderDone(l, a.id, date)) done++
   }
@@ -267,7 +281,7 @@ function activityFocusMins(l: Loaded, activityId: string, dates: string[]): numb
 // 7-cell chronological strip for the calendar week, Mon→Sun (oldest→newest)
 function weekStrip(l: Loaded, a: Activity, weekDates: string[]): WeekStripCell[] {
   return weekDates.map((date): WeekStripCell => {
-    if (!recursOn(a, date, wd(date))) return "pending" // no occurrence that day
+    if (!plannedOn(l, a, date)) return "pending" // no occurrence that day
     if (date >= l.today) return reminderDone(l, a.id, date) ? "done" : "pending" // today not yet due-as-missed
     return reminderDone(l, a.id, date) ? "done" : "notdone"
   })
@@ -340,7 +354,7 @@ export async function getStatsOverview(userId: string): Promise<StatsOverview> {
     if (a.archived || a.type !== "reminder") continue
     for (const date of flakeDates) {
       const w = wd(date)
-      if (!recursOn(a, date, w) || date >= l.today) continue // exclude today (not yet resolvable)
+      if (!recursOn(a, date, w, l.revisionsByActivity.get(a.id) ?? []) || date >= l.today) continue // exclude today (not yet resolvable)
       const mi = mondayIndex(w)
       flakePlanned[mi]++
       if (!reminderDone(l, a.id, date)) flakeNotDone[mi]++
@@ -459,7 +473,7 @@ export async function getStatsDetail(userId: string, activityId: string): Promis
   for (let i = 1; completionLog.length < LOG_LIMIT && i <= 365; i++) {
     const date = shiftDate(l.today, -i)
     if (date < a.recurrence_start) break
-    if (!recursOn(a, date, wd(date))) continue
+    if (!plannedOn(l, a, date)) continue
     const status = l.completionByKey.get(`${a.id}|${date}`)?.status ?? "missed"
     completionLog.push({ id: date, date: fmtMonthDay(parseLocalDate(date)), status })
   }

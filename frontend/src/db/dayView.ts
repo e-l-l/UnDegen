@@ -1,4 +1,5 @@
 import { db } from "./db"
+import { resolveActivity } from "./activityRevisions"
 import { recursOn, todayLocal } from "./recurrence"
 import type {
   Activity,
@@ -6,6 +7,7 @@ import type {
   DayActivity,
   DayActivitySource,
   WorkSession,
+  ActivityRevision,
 } from "./types"
 
 // Derived view of a single date (the calendar model — see ADR 0001). Occurrences
@@ -48,11 +50,23 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
   const today = todayLocal()
 
   // 1. Rules that produce an occurrence on this date.
-  const dueActivities = await db.activities
-    .where("user_id")
-    .equals(userId)
-    .and((a) => recursOn(a, date))
-    .toArray()
+  const activities = await db.activities.where("user_id").equals(userId).toArray()
+  const revisions = activities.length
+    ? await db.activity_revisions.where("activity_id").anyOf(activities.map((a) => a.id)).toArray()
+    : []
+  const revisionsByActivity = new Map<string, ActivityRevision[]>()
+  for (const revision of revisions) {
+    const list = revisionsByActivity.get(revision.activity_id) ?? []
+    list.push(revision)
+    revisionsByActivity.set(revision.activity_id, list)
+  }
+  const resolvedFor = (activity: Activity, itemDate: string) =>
+    resolveActivity(activity, revisionsByActivity.get(activity.id) ?? [], itemDate)
+  const dueActivities = activities.flatMap((activity) => {
+    const activityRevisions = revisionsByActivity.get(activity.id) ?? []
+    const resolved = resolvedFor(activity, date)
+    return resolved && recursOn(activity, date, undefined, activityRevisions) ? [resolved] : []
+  })
 
   // 2. Any state already instantiated for this date (sparse — may be nothing).
   const day = await db.days.where("[user_id+date]").equals([userId, date]).first()
@@ -103,8 +117,9 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
   }
   for (const da of dayActs) {
     if (seen.has(da.activity_id)) continue
-    const activity = await db.activities.get(da.activity_id)
-    if (activity) items.push(build(activity, date, da, da.source))
+    const activity = activities.find((candidate) => candidate.id === da.activity_id)
+    const resolved = activity && !activity.archived ? resolvedFor(activity, date) : undefined
+    if (resolved) items.push(build(resolved, date, da, da.source))
   }
 
   // 4. Real today also surfaces still-running sessions that started on an
@@ -120,17 +135,19 @@ export async function getDayItems(userId: string, date: string): Promise<DayItem
       if (!da) continue
       const ownerDay = await db.days.get(da.day_id)
       if (!ownerDay || ownerDay.user_id !== userId || ownerDay.date >= date) continue
-      const activity = await db.activities.get(da.activity_id)
+      const activity = activities.find((candidate) => candidate.id === da.activity_id)
       if (!activity || activity.user_id !== userId || activity.type !== "long_task" || activity.archived) continue
+      const resolved = resolvedFor(activity, ownerDay.date)
+      if (!resolved) continue
 
-      const existing = activeByActivity.get(activity.id)
+      const existing = activeByActivity.get(resolved.id)
       if (existing) {
         existing.sessions.push(session)
         continue
       }
 
-      activeByActivity.set(activity.id, {
-        activity,
+      activeByActivity.set(resolved.id, {
+        activity: resolved,
         date: ownerDay.date,
         dayActivity: da,
         sessions: [session],

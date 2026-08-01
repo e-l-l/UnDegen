@@ -26,8 +26,9 @@ Two constraints shaped the choice:
 
 Adopt **model C**.
 
-- `activities` is the **single source of truth** for recurrence (`recurrence_days` +
-  `recurrence_start`). No occurrences are stored in advance.
+- `activities` plus its date-effective `activity_revisions` are the source of truth
+  for recurrence. No occurrences are stored in advance. (ADR 0004 supersedes the
+  original single-row configuration detail.)
 - A date's view is **derived** by expanding the rules over that date and left-joining
   whatever state already exists.
 - A `day_activities` row (and its parent `days` row) is **lazily instantiated only when an
@@ -50,8 +51,8 @@ Adopt **model C**.
 
 **Negative / accepted trade-offs**
 - The view expands rules on every read (trivial for a handful of activities; a local Dexie read).
-- **Editing an activity's recurrence rewrites *uncompleted* derived history**; dates with
-  completions are concrete and unaffected. `recurrence_start` bounds how far back it reaches.
+- Schedule edits are date-effective and do not rewrite earlier derived history. See
+  ADR 0004. `recurrence_start` remains the immutable lower bound.
 - The `missed` enum value is unused by the client (reserved for a possible future server sweep).
 
 ## Alternatives rejected

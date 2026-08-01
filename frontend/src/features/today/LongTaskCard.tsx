@@ -17,10 +17,10 @@ interface LongTaskCardProps {
 }
 
 // Delegates entirely: an in_progress session owns the shell (ActiveSessionCard);
-// otherwise the card is picked by the activity's fixed mode — goal mode gets a
-// banked-progress bar, zen mode gets a session-length sparkline. Mode is set
-// once at creation (activity.default_mode) and never changes per session, so
-// there's no third branch to consider here. TaskActions wraps the whole card so
+// otherwise the card is picked by the occurrence's date-resolved mode — goal
+// gets a banked-progress bar, zen gets a session-length sparkline. Running
+// sessions render their own snapshot, so later edits cannot change them.
+// TaskActions wraps the whole card so
 // the ⋮ menu (passed into each idle card's header) shares one delete dialog; the
 // `group` wrapper is the hover target that reveals the kebab. The active-session
 // card omits the visible kebab — its bordered "In session" pill owns the header's

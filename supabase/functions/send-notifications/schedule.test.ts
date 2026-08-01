@@ -9,7 +9,9 @@ import {
   localContext,
   parseHHMM,
   recursOn,
+  resolveReminderRevision,
   type ReminderActivity,
+  type ReminderRevision,
 } from "./schedule.ts"
 
 function reminder(partial: Partial<ReminderActivity>): ReminderActivity {
@@ -73,6 +75,18 @@ Deno.test("recursOn skips a date in exception_dates (delete this day only)", () 
   assertEquals(recursOn(a, { date: "2021-01-08", minutes: 0, weekday: 5 }), false)
 })
 
+Deno.test("resolveReminderRevision selects date-effective config with legacy fallback", () => {
+  const a = reminder({ recurrence_days: [1], strict_time: "08:00" })
+  const revisions: ReminderRevision[] = [{
+    id: "r1", activity_id: a.id, effective_from: "2026-07-06",
+    recurrence_days: [2], reminder_type: "strict", strict_time: "09:00",
+    soft_start: null, soft_interval_mins: null, soft_end: null,
+    updated_at: "2026-07-06T02:00:00Z",
+  }]
+  assertEquals(resolveReminderRevision(a, revisions, "2026-07-05")?.strict_time, "08:00")
+  assertEquals(resolveReminderRevision(a, revisions, "2026-07-06")?.strict_time, "09:00")
+})
+
 // dueSlots takes a localDate (used only by the 'random' seed); strict/soft ignore
 // it, so any placeholder date is fine for those cases.
 const D = "2021-01-01"
@@ -83,6 +97,13 @@ Deno.test("dueSlots strict: single fire inside the lookback window", () => {
   assertEquals(dueSlots(a, 481, 12, D), [480]) // 1 min late — still caught
   assertEquals(dueSlots(a, 495, 12, D), []) // 15 min late — outside window
   assertEquals(dueSlots(a, 479, 12, D), []) // not yet due
+})
+
+Deno.test("dueSlots does not replay slots at or before a same-day revision save", () => {
+  const strict = reminder({ reminder_type: "strict", strict_time: "10:00" })
+  assertEquals(dueSlots(strict, 605, 12, D, 600), [])
+  const soft = reminder({ reminder_type: "soft", soft_start: "10:00", soft_interval_mins: 5, soft_end: "10:30" })
+  assertEquals(dueSlots(soft, 610, 12, D, 604), [605, 610])
 })
 
 Deno.test("dueSlots soft: nudge slots across the window", () => {

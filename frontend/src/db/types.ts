@@ -40,6 +40,35 @@ export interface Activity {
   updated_at: string
 }
 
+// Date-effective schedule/configuration. Activity identity (name/type/start,
+// ordering, archive state and exceptions) remains on Activity; revisions are
+// selected by local calendar date and overlaid on the legacy/latest mirror.
+export interface ActivityRevision {
+  id: string
+  activity_id: string
+  effective_from: string // date
+  recurrence_days: number[]
+  reminder_type?: ReminderType | null
+  strict_time?: string | null
+  soft_start?: string | null
+  soft_interval_mins?: number | null
+  soft_end?: string | null
+  default_mode?: TaskMode | null
+  goal_duration_mins?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export type ActivityRevisionConfig = Omit<
+  ActivityRevision,
+  "id" | "activity_id" | "effective_from" | "created_at" | "updated_at"
+>
+
+export type DateResolvedActivity = Activity & {
+  revision_effective_from?: string
+  revision_updated_at?: string
+}
+
 // Fields a caller supplies to create an activity; the rest (id, ownership,
 // timestamps, position, archived, exception_dates) are stamped by
 // repo.createActivity. Shared so callers and the repo can't drift on the shape.
@@ -133,6 +162,7 @@ export interface NotificationLog {
 // ── syncQueue (local-only) — pending writes to flush to Supabase ─────────────
 export type TableName =
   | 'activities'
+  | 'activity_revisions'
   | 'days'
   | 'day_activities'
   | 'completions'

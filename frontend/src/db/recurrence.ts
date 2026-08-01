@@ -1,4 +1,5 @@
-import type { Activity } from "./types"
+import { resolveActivity } from "./activityRevisions.ts"
+import type { Activity, ActivityRevision } from "./types"
 
 // Pure recurrence helpers, shared by the derived day-view and the write path.
 // Dates are local 'YYYY-MM-DD' strings; weekday is JS getDay() (0=Sun..6=Sat),
@@ -85,11 +86,17 @@ export function hourAfterLocal(time: string): string {
 // that one date is skipped. (?? [] guards rows created before the column.)
 // `weekday` is an optional precomputed weekdayOf(date) — pass it from a hot loop
 // that already knows the weekday to skip re-parsing the date string.
-export function recursOn(activity: Activity, date: string, weekday: number = weekdayOf(date)): boolean {
+export function recursOn(
+  activity: Activity,
+  date: string,
+  weekday: number = weekdayOf(date),
+  revisions: readonly ActivityRevision[] = []
+): boolean {
+  const resolved = resolveActivity(activity, revisions, date)
   return (
     !activity.archived &&
-    activity.recurrence_start <= date &&
-    activity.recurrence_days.includes(weekday) &&
+    resolved !== undefined &&
+    resolved.recurrence_days.includes(weekday) &&
     !(activity.exception_dates ?? []).includes(date)
   )
 }

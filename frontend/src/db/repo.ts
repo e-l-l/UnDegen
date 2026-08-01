@@ -1,10 +1,13 @@
 import type { Table } from "dexie"
 
 import { requestFlush } from "@/sync/syncEngine"
+import { activityConfig, effectiveEditDate, resolveActivity } from "./activityRevisions"
 import { db } from "./db"
 import { recursOn } from "./recurrence"
 import type {
   Activity,
+  ActivityRevision,
+  ActivityRevisionConfig,
   Completion,
   CompletionStatus,
   Day,
@@ -22,6 +25,7 @@ import type {
 
 type RowFor = {
   activities: Activity
+  activity_revisions: ActivityRevision
   days: Day
   day_activities: DayActivity
   completions: Completion
@@ -114,9 +118,67 @@ export async function createActivity(
   userId: string,
   input: NewActivityInput
 ): Promise<Activity> {
-  return db.transaction("rw", db.activities, db.syncQueue, async () => {
+  return db.transaction("rw", db.activities, db.activity_revisions, db.syncQueue, async () => {
     const position = await nextActivityPosition(userId)
-    return newActivity(userId, { ...input, position, archived: false, exception_dates: [] })
+    const activity = await newActivity(userId, { ...input, position, archived: false, exception_dates: [] })
+    const revision: ActivityRevision = {
+      id: newId(),
+      activity_id: activity.id,
+      effective_from: activity.recurrence_start,
+      ...activityConfig(activity),
+      created_at: activity.created_at,
+      updated_at: activity.updated_at,
+    }
+    await createRow("activity_revisions", revision)
+    return activity
+  })
+}
+
+export type EditActivityInput = { name: string; config: ActivityRevisionConfig }
+
+export async function editActivity(
+  activityId: string,
+  input: EditActivityInput,
+  today: string
+): Promise<Activity> {
+  return db.transaction("rw", db.activities, db.activity_revisions, db.syncQueue, async () => {
+    const activity = await db.activities.get(activityId)
+    if (!activity || activity.archived) throw new Error("Activity not found")
+    const now = nowIso()
+    const effectiveFrom = effectiveEditDate(activity, today)
+    const revisions = await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
+    const existing = revisions.find((revision) => revision.effective_from === effectiveFrom)
+
+    // A legacy client can create an activity without a revision even after the
+    // migration. Before adding today's edit, preserve its old mirror as the
+    // initial historical revision so updating that mirror cannot rewrite history.
+    if (revisions.length === 0 && effectiveFrom > activity.recurrence_start) {
+      await createRow("activity_revisions", {
+        id: newId(),
+        activity_id: activity.id,
+        effective_from: activity.recurrence_start,
+        ...activityConfig(activity),
+        created_at: activity.created_at,
+        updated_at: activity.updated_at,
+      })
+    }
+    const revision: ActivityRevision = {
+      id: existing?.id ?? newId(),
+      activity_id: activity.id,
+      effective_from: effectiveFrom,
+      ...input.config,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    }
+    const updated: Activity = {
+      ...activity,
+      ...input.config,
+      name: input.name.trim(),
+      updated_at: now,
+    }
+    await updateRow("activities", updated)
+    await (existing ? updateRow : createRow)("activity_revisions", revision)
+    return updated
   })
 }
 
@@ -152,7 +214,10 @@ export async function ensureDayActivity(
   if (existing) return existing
   // source falls out of the rule: recurring if it occurs on this date, else a manual add.
   const activity = await db.activities.get(activityId)
-  const source: DayActivitySource = activity && recursOn(activity, date) ? "recurring" : "manual"
+  const revisions = activity
+    ? await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
+    : []
+  const source: DayActivitySource = activity && recursOn(activity, date, undefined, revisions) ? "recurring" : "manual"
   const row: DayActivity = { id: newId(), day_id: day.id, activity_id: activityId, source, position: 0 }
   await createRow("day_activities", row)
   return row
@@ -239,11 +304,15 @@ export async function startWorkSession(
 
   const da = await ensureDayActivity(userId, date, activityId)
   const activity = await db.activities.get(activityId)
+  const revisions = activity
+    ? await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
+    : []
+  const resolved = activity ? resolveActivity(activity, revisions, date) : undefined
   const row: WorkSession = {
     id: newId(),
     day_activity_id: da.id,
-    mode: activity?.default_mode ?? "zen",
-    goal_duration_mins: activity?.goal_duration_mins ?? null,
+    mode: resolved?.default_mode ?? "zen",
+    goal_duration_mins: resolved?.goal_duration_mins ?? null,
     started_at: nowIso(),
     status: "in_progress",
   }
@@ -301,14 +370,20 @@ export async function removeOccurrence(
 ): Promise<void> {
   await db.transaction(
     "rw",
-    [db.activities, db.days, db.day_activities, db.completions, db.work_sessions, db.syncQueue],
+    [db.activities, db.activity_revisions, db.days, db.day_activities, db.completions, db.work_sessions, db.syncQueue],
     async () => {
       const activity = await db.activities.get(activityId)
       if (!activity) return
+      const da = await findDayActivity(userId, date, activityId)
 
       // 1. Suppress future derivation of this recurring occurrence. recursOn is
       // false once the date is already excepted, so this can't append a duplicate.
-      if (recursOn(activity, date)) {
+      // A state-bearing occurrence can have been removed from today's new rule
+      // by an edit but still be visible; its recurring source keeps deletion
+      // one-way if another same-day edit later adds the weekday back.
+      const revisions = await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
+      const shouldExcept = recursOn(activity, date, undefined, revisions) || da?.source === "recurring"
+      if (shouldExcept && !(activity.exception_dates ?? []).includes(date)) {
         await updateRow("activities", {
           ...activity,
           exception_dates: [...(activity.exception_dates ?? []), date],
@@ -317,7 +392,6 @@ export async function removeOccurrence(
       }
 
       // 2. Delete any instantiated state for this date (children before parent).
-      const da = await findDayActivity(userId, date, activityId)
       if (!da) return
 
       const completion = await db.completions.where("day_activity_id").equals(da.id).first()

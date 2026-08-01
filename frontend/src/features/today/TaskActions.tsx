@@ -1,4 +1,5 @@
 import { useState, type ReactElement, type ReactNode } from "react"
+import { useLiveQuery } from "dexie-react-hooks"
 import { MoreVertical } from "lucide-react"
 
 import {
@@ -14,6 +15,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { Activity } from "@/db/types"
+import { resolveActivity } from "@/db/activityRevisions"
+import { db } from "@/db/db"
+import { todayLocal } from "@/db/recurrence"
+import { EditActivityDialog } from "@/features/activities/EditActivityDialog"
 import { cn } from "@/lib/utils"
 import { DeleteChoiceDialog } from "./DeleteChoiceDialog"
 
@@ -42,6 +47,16 @@ interface TaskActionsProps {
 // entire-activity choice dialog). Add further per-task actions (edit…) here.
 export function TaskActions({ activity, date, userId, missed, onToggleMissed, children }: TaskActionsProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  // A cross-midnight active session carries its owner-date config in DayItem;
+  // editing is always based on today's config, so resolve that fresh from Dexie.
+  const editActivity = useLiveQuery(async () => {
+    if (!editOpen) return undefined
+    const identity = await db.activities.get(activity.id)
+    if (!identity) return undefined
+    const revisions = await db.activity_revisions.where("activity_id").equals(identity.id).toArray()
+    return resolveActivity(identity, revisions, todayLocal()) ?? identity
+  }, [editOpen, activity.id])
   const openDialog = () => setDialogOpen(true)
   const missedLabel = missed ? "Undo" : "Missed it"
 
@@ -58,6 +73,7 @@ export function TaskActions({ activity, date, userId, missed, onToggleMissed, ch
         <MoreVertical className="size-4" strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">
+        <DropdownMenuItem onSelect={() => setEditOpen(true)}>Edit activity</DropdownMenuItem>
         {onToggleMissed && <DropdownMenuItem onSelect={onToggleMissed}>{missedLabel}</DropdownMenuItem>}
         <DropdownMenuItem variant="destructive" onSelect={openDialog}>
           Delete…
@@ -71,6 +87,7 @@ export function TaskActions({ activity, date, userId, missed, onToggleMissed, ch
       <ContextMenu>
         <ContextMenuTrigger asChild>{children(kebab)}</ContextMenuTrigger>
         <ContextMenuContent className="min-w-36">
+          <ContextMenuItem onSelect={() => setEditOpen(true)}>Edit activity</ContextMenuItem>
           {onToggleMissed && <ContextMenuItem onSelect={onToggleMissed}>{missedLabel}</ContextMenuItem>}
           <ContextMenuItem variant="destructive" onSelect={openDialog}>
             Delete…
@@ -84,6 +101,7 @@ export function TaskActions({ activity, date, userId, missed, onToggleMissed, ch
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
+      {editOpen && editActivity && <EditActivityDialog activity={editActivity} onClose={() => setEditOpen(false)} />}
     </>
   )
 }

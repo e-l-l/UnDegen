@@ -15,6 +15,7 @@ import { flushQueue } from "./syncEngine"
 // Parent → child order so bulkPut lands parents before children within the txn.
 const TABLES: TableName[] = [
   "activities",
+  "activity_revisions",
   "days",
   "day_activities",
   "completions",

@@ -25,8 +25,9 @@ Two hard facts forced the shape:
   zones make "08:00" ambiguous) and not per-activity (nobody sets per-reminder zones).
 
 - **Engine: poll-and-compute, no stored schedule.** `pg_cron` fires the
-  `send-notifications` Edge Function every minute as a dumb heartbeat; the function derives
-  who is due *now* in each user's local time (porting the frontend's `recursOn`). This
+  `send-notifications` Edge Function every minute as a dumb heartbeat; the function resolves
+  the date-effective activity revision (ADR 0004) and derives who is due *now* in each
+  user's local time (porting the frontend's `recursOn`). This
   matches the project's "derive on read, don't store derived values" rule (ADR 0001) — a
   precomputed `next_fire_at` would be stored derived state to recompute on every activity
   edit, tz change, and DST transition.

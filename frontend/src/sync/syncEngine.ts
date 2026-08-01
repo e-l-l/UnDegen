@@ -41,6 +41,10 @@ async function drainOnce(): Promise<void> {
       const { error } =
         item.op === "delete"
           ? await supabase.from(table).delete().eq("id", item.rowId)
+          : table === "activity_revisions"
+            ? await supabase
+                .from(table)
+                .upsert(item.payload ?? {}, { onConflict: "activity_id,effective_from" })
           : item.op === "update"
             ? await supabase.from(table).update(item.payload ?? {}).eq("id", item.rowId)
             : await supabase.from(table).upsert(item.payload ?? {})

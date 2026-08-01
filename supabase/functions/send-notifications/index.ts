@@ -28,7 +28,9 @@ import {
   localContext,
   type LocalContext,
   recursOn,
+  resolveReminderRevision,
   type ReminderActivity,
+  type ReminderRevision,
 } from "./schedule.ts"
 
 const LOOKBACK_MINS = 12
@@ -93,6 +95,18 @@ Deno.serve(async (req: Request) => {
   const tzByUser = new Map(settings.map((s) => [s.user_id, s.timezone]))
   const activities = (actResp.data ?? []) as ReminderActivity[]
 
+  const revisionsResp = activities.length
+    ? await admin
+        .from("activity_revisions")
+        .select("id, activity_id, effective_from, reminder_type, strict_time, soft_interval_mins, soft_start, soft_end, recurrence_days, updated_at")
+        .in("activity_id", activities.map((activity) => activity.id))
+    : { data: [], error: null }
+  if (revisionsResp.error) return json({ error: revisionsResp.error.message }, 500)
+  const revisionsByActivity = groupBy(
+    (revisionsResp.data ?? []) as ReminderRevision[],
+    (revision) => revision.activity_id
+  )
+
   // 4. Compute due slots (in each user's local time, within the lookback window).
   //    localContext depends only on (now, tz), so memoize per zone across activities.
   const ctxByTz = new Map<string, LocalContext>()
@@ -105,9 +119,16 @@ Deno.serve(async (req: Request) => {
       ctx = localContext(now, tz)
       ctxByTz.set(tz, ctx)
     }
-    if (!recursOn(a, ctx)) continue
-    for (const slot of dueSlots(a, ctx.minutes, LOOKBACK_MINS, ctx.date)) {
-      due.push({ activity: a, localDate: ctx.date, slot })
+    const resolved = resolveReminderRevision(a, revisionsByActivity.get(a.id) ?? [], ctx.date)
+    if (!resolved || !recursOn(resolved, ctx)) continue
+
+    let cutoff: number | undefined
+    if (resolved.revision_effective_from === ctx.date && resolved.revision_updated_at) {
+      const saved = localContext(new Date(resolved.revision_updated_at), tz)
+      if (saved.date === ctx.date) cutoff = saved.minutes
+    }
+    for (const slot of dueSlots(resolved, ctx.minutes, LOOKBACK_MINS, ctx.date, cutoff)) {
+      due.push({ activity: resolved, localDate: ctx.date, slot })
     }
   }
   if (!due.length) return json({ sent: 0 })

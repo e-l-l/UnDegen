@@ -20,21 +20,24 @@ The cloud backend. There is **no custom server** — the app talks to Supabase d
 - `migrations/0006_service_role_read_grants.sql` — grants `service_role` **SELECT** on `activities` / `days` / `day_activities` / `completions`. Same failure class as `0005`, different tables: the alarm reads these as `service_role`, but only `authenticated` had SELECT — so `from("activities").select(...)` was denied, the handler swallowed the error (`data ?? []`), `due` came back empty, and every tick returned `{"sent":0}` with an empty `notification_log`. **Second real prod incident** — reminders never fired. SELECT only (the function never writes these). **New envs: apply after `0001`.**
 - `migrations/0007_activity_exception_dates.sql` — adds `activities.exception_dates date[] not null default '{}'`: **single-occurrence removal** ("delete this day only"). A local date in the array is skipped by the recurrence expansion without touching the rule or archiving. Evaluated per-user against the *local* date in both `recursOn`s (app + function), never as a server-side `WHERE` (each user's "today" differs). **New envs: apply after `0001`.**
 - `migrations/0008_reminder_type_random.sql` — adds `'random'` to the `reminder_type` enum: a **single-fire reminder at a seeded-random minute inside a window**. Reuses `soft_start`/`soft_end` as the window bounds (`soft_interval_mins` stays null) — **no new columns and no CHECK change** (`reminder_config_only_on_reminder` only nulls-off config on non-reminders, so `soft_*` are already allowed on any reminder). Standalone `ALTER TYPE … ADD VALUE IF NOT EXISTS` — the value is used by nothing in-file, so Postgres's "a new enum value can't be used in the txn that adds it" rule doesn't bite. **New envs: apply after `0001`.**
+- `migrations/0009_activity_revisions.sql` — date-effective schedule/configuration with one backfilled initial revision, parent-type validation, owner RLS, explicit authenticated/service-role grants, and server-managed save timestamps. Legacy activity columns remain as the latest compatibility mirror (ADR 0004).
 - `functions/send-notifications/` — the Web Push sender (Deno). `index.ts` (handler) + `schedule.ts` (pure due-ness/slot logic, mirrors the frontend's `recurrence.ts` — its `recursOn` skips a date in `exception_dates`, and `index.ts` already filters `archived = false` in the activities query) + `schedule.test.ts` (`deno test`).
 
 ## What the schema encodes
 
-Six tables. `users` is Supabase Auth's `auth.users` (no custom columns). The other five:
+Seven tables. `users` is Supabase Auth's `auth.users` (no custom columns). The other six include date-effective revisions:
 
 ```
-activities ──→ day_activities ←── days
+activities ──→ activity_revisions
+     │
+     └──────→ day_activities ←── days
                     │
               ┌─────┴─────┐
           completions   work_sessions
 ```
 
 Decisions baked into the SQL (don't relitigate — see CLAUDE.md):
-- Activity config = **nullable columns on `activities`**, guarded by two check constraints (`reminder_config_only_on_reminder`, `long_task_config_only_on_long_task`) so config can only be set on the matching `type`.
+- Activity config = date-effective rows in **`activity_revisions`**; nullable columns on `activities` remain a legacy/latest compatibility mirror. Revision shape is checked and validated against the immutable parent type.
 - `day_activities` has **no `type` column** (inferred via join).
 - **No stored derived values** (streaks/rates computed on read).
 - `work_sessions` goal fields are **snapshots** at session start (immutable history).
@@ -42,9 +45,10 @@ Decisions baked into the SQL (don't relitigate — see CLAUDE.md):
 
 ## RLS — the security model (critical)
 
-Every data table has RLS enabled with an owner-only `for all` policy. Two ownership patterns:
+Every data table has RLS enabled with an owner-only `for all` policy. Ownership resolves directly or through a parent:
 
 - `activities`, `days` carry `user_id` directly → `user_id = auth.uid()`.
+- `activity_revisions` resolves through its parent `activities.user_id`.
 - `day_activities`, `completions`, `work_sessions` have **no `user_id`** → ownership resolves via **join back to `days.user_id`** inside the policy (an `exists (...)` subquery).
 
 **Implication for new tables:** any new table reachable per-user must get RLS enabled + a policy in the same migration, following whichever pattern fits. A table without a policy is invisible to the client (RLS default-deny). Don't forget the `with check` clause — `using` alone guards reads/deletes but not inserts/updates. **Also `grant select, insert, update, delete … to authenticated, service_role` explicitly** — PostgREST checks the base-table grant *before* RLS, so a table with a perfect policy but no grant returns 403 on every write. Don't rely on Supabase's default-privilege auto-grant firing; `0003` didn't get it and every push write 403'd (see `0005`). **`service_role` needs its own grant too** — it bypasses RLS but *not* table grants, and the alarm reads `activities`/`days`/`day_activities`/`completions` as `service_role`. Those had SELECT for `authenticated` only, so the function's reads were silently denied and reminders never fired (see `0006`). Any table the function reads must grant `service_role` SELECT.
@@ -57,7 +61,7 @@ Server-side reminders. Full rationale in **ADR 0003**; the shape:
 
 - **`pg_cron`** fires the **`send-notifications`** Edge Function every minute (a dumb
   heartbeat — no schedule logic in SQL). The function derives who is due *now*.
-- The function reads `activities` + `user_settings.timezone` + `push_subscriptions`, computes
+- The function reads `activities` + `activity_revisions` + `user_settings.timezone` + `push_subscriptions`, resolves the local-date revision, computes
   due **slots** in each user's local wall-clock, **claims** each in `notification_log`
   (`insert … on conflict do nothing` = at-most-once), then sends Web Push via `npm:web-push`.
 - **Timezone is load-bearing** and lives in `user_settings` (one IANA zone per user). Without
@@ -70,6 +74,7 @@ Server-side reminders. Full rationale in **ADR 0003**; the shape:
   so an offline/unsynced mark near fire-time may still let one through.
 - **Dead subscriptions self-clean**: a `410 Gone`/`404` from the push service deletes that
   `push_subscriptions` row.
+- **Same-day edit cutoff:** slots at or before a today-effective revision's server save minute are not replayed; later slots remain eligible.
 
 These three tables are **cloud-only**: written direct to Supabase by the client (never through
 Dexie/`syncQueue`) and read only by the function (service-role). Still RLS owner-only.

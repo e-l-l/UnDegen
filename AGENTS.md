@@ -86,10 +86,12 @@ Implementation detail lives with the code — see `frontend/CONTEXT.md` (PWA sec
 
 ## Data Model
 
-Six tables. Central relationship:
+Seven tables. Central relationship:
 
 ```
-activities ──→ day_activities ←── days
+activities ──→ activity_revisions
+     │
+     └──────→ day_activities ←── days
                     │
               ┌─────┴─────┐
           completions   work_sessions
@@ -102,13 +104,16 @@ Managed by Supabase Auth. No custom columns. Per-user app config lives in a **se
 Cloud-only, added by migration `0003` for Web Push (ADR 0003). Not mirrored in Dexie — the client writes them **direct** to Supabase (see What Not To Do), and the Edge Function reads them via service-role. `notification_log` is the claim-then-send idempotency ledger, unique on `(activity_id, local_date, slot)`.
 
 ### `activities`
-Template/definition of a trackable thing. Two types: `reminder` and `long_task`. Type-specific config lives as nullable columns on this table (no extension tables).
+Stable identity of a trackable thing. Two immutable types: `reminder` and `long_task`. Schedule/config columns remain as a legacy/latest mirror so older installed PWAs keep working; date-aware reads prefer `activity_revisions`.
 
 Key columns: `id`, `user_id`, `name`, `type`, `recurrence_days` (int[]), `recurrence_start` (date), `exception_dates` (date[] — dates the rule skips; "delete this day only", migration `0007`), `archived` (soft-delete; "delete entire event"), `position`
 
 Reminder-specific (null if long_task): `reminder_type` (`strict`|`soft`|`random`), `strict_time`, `soft_start`, `soft_interval_mins`, `soft_end`. **`soft_start`/`soft_end` do double duty**: the soft-nudge window for `soft`, and the fire-window for `random` (then `soft_interval_mins` is null). `random` added by migration `0008` — see Key Decisions.
 
 Long-task-specific (null if reminder): `default_mode` (`goal`|`zen`), `goal_duration_mins`, `goal_unit`, `goal_value`
+
+### `activity_revisions`
+Date-effective schedule/configuration, unique on `(activity_id, effective_from)`. The latest revision whose `effective_from <= viewed date` configures that date; before the activity's immutable `recurrence_start`, no occurrence exists. Editing a started activity upserts today's revision; editing a future activity replaces its initial future revision. Names remain on `activities`, so renames intentionally relabel all history. See ADR 0004.
 
 ### `days`
 One row per calendar date per user. **Sparse / engagement-based** — created lazily when a date first acquires state (a `note`, or the first `day_activity` instantiated on it), *not* for every calendar day. Container for the daily view.
@@ -135,7 +140,7 @@ Goal fields are snapshotted at session start — editing an activity later doesn
 Key columns: `id`, `day_activity_id`, `mode` (`goal`|`zen`), `goal_duration_mins`, `goal_unit`, `goal_target`, `goal_actual`, `started_at`, `ended_at`, `total_secs`, `status` (`in_progress`|`completed`|`abandoned`), `goal_met`, `note`
 
 ### Dexie (local) schema
-Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pending write operations to flush when back online.
+Mirrors the six user-data Supabase tables (`activities`, `activity_revisions`, `days`, `day_activities`, `completions`, `work_sessions`), plus one local-only table: `syncQueue`.
 
 ---
 
@@ -147,9 +152,9 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Backend service | None — Supabase-direct | `supabase-js` covers auth + CRUD with RLS; only Web Push needs a server, done via Edge Function + `pg_cron`. Dropped FastAPI (redundant, extra host + secret surface) |
 | Local DB | Dexie.js | Clean async/await API over raw IndexedDB, TypeScript support, schema versioning |
 | Data strategy | Local-first | Offline is a core feature; Supabase is cloud mirror only |
-| Config storage | Nullable columns on `activities` | Avoids multi-table joins for every config read; ~10 nullables is fine for this scale |
+| Config storage | Date-effective `activity_revisions`; legacy/latest mirror on `activities` | Schedule edits apply from a local date without rewriting history; the mirror keeps older installed PWAs compatible. ADR 0004 supersedes the single-row portion of the earlier choice |
 | `day_activities.type` | Removed | Inferrable from join; storing it creates drift risk |
-| Recurrence model | Calendar-style (derive, don't pre-store) | Occurrences expanded on read from `activities` recurrence; `day_activities` are override rows instantiated lazily when an instance gains state; `days` are sparse/engagement-based. Alarms fire server-side from `activities`, independent of materialisation |
+| Recurrence model | Calendar-style (derive, don't pre-store) | Occurrences expand the date-effective activity revision (legacy fallback); `day_activities` remain lazy override rows and `days` remain sparse. Alarms resolve the same revision server-side |
 | Deleting a task | Day → `exception_dates`; event → `archived` | "Delete this day only" appends the date to `activities.exception_dates` (both `recursOn`s skip it) and wipes that date's instantiated state; "delete entire event" flips `archived` (hides everywhere, keeps `completions`/`work_sessions` for history). Both one-way from the UI in v0. `repo.removeOccurrence` / `repo.archiveActivity` |
 | Ad-hoc tasks (v0) | Not supported | All `day_activities` have an `activity_id`; everything comes from a template |
 | Pause/resume (v0) | Not supported | Adds timer + sync + analytics complexity; `total_secs` is a simple diff for now |
@@ -158,7 +163,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 | Missed detection | Derived on read, never written | No cron flip, no stored `missed` status; view computes it (`frontend/src/db/`: `recurrence.ts`, `dayView.ts`, `repo.ts`). ADR 0001 |
 | "Missed it" action | Deliberate skip → stores `skipped`, reminders only | The Today per-occurrence menu ("Missed it", `TaskActions.tsx`) writes `completions.status = 'skipped'` via `markReminder(…, "skipped")` — *not* the derived `missed`, which stays unwritten (ADR 0001). Silences that occurrence's notifications (soft nudges **and** the strict fire). Reversible via "Undo" (`clearReminder`). Renders dimmed+struck on Today (user-chosen dismissal, not banned system-missed styling) and unified as "Missed" in Stats. Sole source of `skipped` completions |
 | Stats roast (tone) | Sarcastic missed-state copy, **Stats surface only** | The honest-mirror motivational engine. Overrides the global "no punishing missed states" rule, scoped to Stats. Targets the *gap* (not the user), never needles a good week; a great week gets a plain nod. Lives in `frontend/src/features/stats/copy.ts` (threshold-driven), not in JSX. Contained — Today etc. stay non-punishing |
-| Notification firing | Poll-and-compute, server-side | `pg_cron` (1/min) → `send-notifications` Edge Function derives who's due now from `activities` + tz; no stored schedule. Claim-then-send via `notification_log` (at-most-once). A `done`/`skipped` completion for the occurrence suppresses its send — **both** types (soft stops remaining nudges, strict is pre-empted before its single fire). Best-effort: reads Supabase, so an offline/unsynced mark near fire-time may still let one through. ADR 0003 |
+| Notification firing | Poll-and-compute, server-side | `pg_cron` (1/min) resolves `activity_revisions` for each user's local date (legacy fallback), then derives due slots. A same-day edit never replays slots at/before its server save minute; remaining slots may fire. Claim-then-send and done/skipped suppression are unchanged. ADRs 0003–0004 |
 | `random` reminder subtype | Single fire at a **seeded-random** minute in a window; time hidden | Third `reminder_type` (migration `0008`). Reuses `soft_start`/`soft_end` as the window (`soft_interval_mins` null) — no new columns, no CHECK change. Fire minute = `hash32(activity_id + local_date)` mapped into `[start,end]`, computed in `schedule.ts` `dueSlots` every tick — **deterministic per (activity, day)** so `notification_log` dedupes it exactly like strict; **never stored** (derive-on-read, ADR 0001). Unpredictable to the user *is the point* (surprise → can't pre-arrange avoidance): Today hides the time entirely — the row just reads "RANDOM", never the window or the minute (the range read as clutter); anchored at `soft_end` so a pending one stays in "up next". Push copy "Surprise. It's time." Must stay deterministic — a per-tick `Math.random()` would change the slot every minute and fire repeatedly |
 | Timezone | Per-user IANA in `user_settings` | Needed to place zoneless `strict_time`; last-device-wins; DST-safe via `AT TIME ZONE`. Not per-device/per-activity. ADR 0003 |
 | Notification writes | Direct to Supabase | `push_subscriptions`/`user_settings` bypass Dexie/`syncQueue` — cloud-only, online-only, never read from Dexie. The one write exception |
@@ -184,7 +189,7 @@ Mirrors all six Supabase tables, plus one local-only table: `syncQueue` — pend
 - Don't route cloud-only notification state (`push_subscriptions`, `user_settings`) through Dexie/`syncQueue` — write it direct to Supabase (the one documented write exception; see ADR 0003)
 - Don't store derived values (streaks, completion rates) — compute on read
 - Don't add a `type` column to `day_activities` — it's inferrable and creates drift
-- Don't add extension tables for activity config — use nullable columns on `activities`
+- Don't add arbitrary type-extension tables; date-effective activity config belongs in the settled `activity_revisions` table and its legacy mirror
 - Don't use gamification patterns (streaks as hero metric, confetti, points, levels)
 - Don't auto-update the service worker silently — always prompt
 - Don't land a change that invalidates a `CONTEXT.md` without updating that file in the same change
