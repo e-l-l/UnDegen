@@ -130,16 +130,22 @@ create trigger activity_revisions_validate_and_stamp
 create or replace function mirror_activity_revision() returns trigger
 language plpgsql as $$
 begin
-  update activities set
-    recurrence_days = new.recurrence_days,
-    reminder_type = new.reminder_type,
-    strict_time = new.strict_time,
-    soft_start = new.soft_start,
-    soft_interval_mins = new.soft_interval_mins,
-    soft_end = new.soft_end,
-    default_mode = new.default_mode,
-    goal_duration_mins = new.goal_duration_mins
-  where id = new.activity_id;
+  update activities a set
+    recurrence_days = latest.recurrence_days,
+    reminder_type = latest.reminder_type,
+    strict_time = latest.strict_time,
+    soft_start = latest.soft_start,
+    soft_interval_mins = latest.soft_interval_mins,
+    soft_end = latest.soft_end,
+    default_mode = latest.default_mode,
+    goal_duration_mins = latest.goal_duration_mins
+  from (
+    select ar.* from activity_revisions ar
+    where ar.activity_id = new.activity_id
+    order by ar.effective_from desc
+    limit 1
+  ) latest
+  where a.id = new.activity_id;
   return new;
 end;
 $$;
