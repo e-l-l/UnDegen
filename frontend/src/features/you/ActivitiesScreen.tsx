@@ -1,9 +1,15 @@
 import { useState } from "react"
 import { useLiveQuery } from "dexie-react-hooks"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react"
 import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { groupActivityRevisions, resolveActivity } from "@/db/activityRevisions"
 import { db } from "@/db/db"
 import { todayLocal } from "@/db/recurrence"
@@ -13,6 +19,7 @@ import { EditActivityDialog } from "@/features/activities/EditActivityDialog"
 import { DesktopIsland } from "@/features/today/DesktopIsland"
 import { iconForActivity } from "@/features/today/iconForActivity"
 import { MobileTabBar } from "@/features/today/MobileTabBar"
+import { DeleteActivityDialog } from "./DeleteActivityDialog"
 
 async function loadActivities(userId: string): Promise<Activity[]> {
   const activities = await db.activities.where("user_id").equals(userId).and((activity) => !activity.archived).sortBy("position")
@@ -26,7 +33,15 @@ async function loadActivities(userId: string): Promise<Activity[]> {
   )
 }
 
-function ActivityList({ activities, onEdit }: { activities: Activity[]; onEdit: (activity: Activity) => void }) {
+function ActivityList({
+  activities,
+  onEdit,
+  onDelete,
+}: {
+  activities: Activity[]
+  onEdit: (activity: Activity) => void
+  onDelete: (activity: Activity) => void
+}) {
   if (activities.length === 0) {
     return <div className="mt-20 text-center text-[14px] text-ink-muted">No active activities yet.</div>
   }
@@ -37,15 +52,36 @@ function ActivityList({ activities, onEdit }: { activities: Activity[]; onEdit: 
         const future = todayLocal() < activity.recurrence_start
         const start = future ? new Date(`${activity.recurrence_start}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null
         return (
-          <Button key={activity.id} type="button" variant="ghost" onClick={() => onEdit(activity)} className={`h-auto w-full justify-start gap-3.5 rounded-none px-4 py-4 text-left hover:bg-[#181818] ${index ? "border-t border-[#222222]" : ""}`}>
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-[#2b2b2b] bg-[#1a1a1a]"><Icon className="size-5 text-[#8a8a8a]" strokeWidth={1.7} /></div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-medium text-[#dedede]">{activity.name}</div>
-              <div className="mt-1 truncate text-[12.5px] text-[#717171]">{activitySummary(activity)}</div>
-              {start && <div className="mt-1 text-[12px] text-[#5e5e5e]">Starts {start}</div>}
-            </div>
-            <ChevronRight className="size-4.5 shrink-0 text-[#555]" />
-          </Button>
+          <div key={activity.id} className={`flex items-center ${index ? "border-t border-[#222222]" : ""}`}>
+            <Button type="button" variant="ghost" onClick={() => onEdit(activity)} className="h-auto min-w-0 flex-1 justify-start gap-3.5 rounded-none px-4 py-4 pr-2 text-left hover:bg-[#181818]">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-[11px] border border-[#2b2b2b] bg-[#1a1a1a]"><Icon className="size-5 text-[#8a8a8a]" strokeWidth={1.7} /></div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium text-[#dedede]">{activity.name}</div>
+                <div className="mt-1 truncate text-[12.5px] text-[#717171]">{activitySummary(activity)}</div>
+                {start && <div className="mt-1 text-[12px] text-[#5e5e5e]">Starts {start}</div>}
+              </div>
+              <ChevronRight className="size-4.5 shrink-0 text-[#555]" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Actions for ${activity.name}`}
+                  className="mr-2 text-ink-faint hover:bg-[#1d1d1d] hover:text-ink-body"
+                >
+                  <MoreVertical className="size-4.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuItem onSelect={() => onEdit(activity)}>Edit activity</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onSelect={() => onDelete(activity)}>
+                  Delete activity…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )
       })}
     </div>
@@ -56,6 +92,7 @@ export function ActivitiesScreen({ userId }: { userId: string }) {
   const navigate = useNavigate()
   const activities = useLiveQuery(() => loadActivities(userId), [userId])
   const [editing, setEditing] = useState<Activity | null>(null)
+  const [deleting, setDeleting] = useState<Activity | null>(null)
   const list = activities ?? []
   const header = (
     <div>
@@ -68,14 +105,15 @@ export function ActivitiesScreen({ userId }: { userId: string }) {
     <>
       <div className="flex h-svh flex-col bg-background lg:hidden">
         <div className="shrink-0 px-5.5 pt-[calc(env(safe-area-inset-top)+0.75rem)]">{header}</div>
-        <div className="flex-1 overflow-auto px-5.5 pt-6 pb-5"><ActivityList activities={list} onEdit={setEditing} /></div>
+        <div className="flex-1 overflow-auto px-5.5 pt-6 pb-5"><ActivityList activities={list} onEdit={setEditing} onDelete={setDeleting} /></div>
         <MobileTabBar />
       </div>
       <div className="relative hidden h-svh overflow-hidden bg-background lg:block">
         <DesktopIsland />
-        <div className="h-full overflow-auto px-10 pt-[calc(var(--island-h)+1rem)] pb-10"><div className="mx-auto max-w-[620px]">{header}<div className="mt-7"><ActivityList activities={list} onEdit={setEditing} /></div></div></div>
+        <div className="h-full overflow-auto px-10 pt-[calc(var(--island-h)+1rem)] pb-10"><div className="mx-auto max-w-[620px]">{header}<div className="mt-7"><ActivityList activities={list} onEdit={setEditing} onDelete={setDeleting} /></div></div></div>
       </div>
       {editing && <EditActivityDialog activity={editing} onClose={() => setEditing(null)} />}
+      {deleting && <DeleteActivityDialog activity={deleting} open onOpenChange={(open) => !open && setDeleting(null)} />}
     </>
   )
 }
