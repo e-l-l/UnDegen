@@ -1,5 +1,4 @@
 import { useState, type ReactElement, type ReactNode } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 import { MoreVertical } from "lucide-react"
 
 import {
@@ -15,9 +14,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { Activity } from "@/db/types"
-import { resolveActivity } from "@/db/activityRevisions"
-import { db } from "@/db/db"
+import { getResolvedActivity } from "@/db/activityQueries"
 import { todayLocal } from "@/db/recurrence"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { EditActivityDialog } from "@/features/activities/EditActivityDialog"
 import { cn } from "@/lib/utils"
 import { DeleteChoiceDialog } from "./DeleteChoiceDialog"
@@ -49,13 +48,10 @@ export function TaskActions({ activity, date, userId, missed, onToggleMissed, ch
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   // A cross-midnight active session carries its owner-date config in DayItem;
-  // editing is always based on today's config, so resolve that fresh from Dexie.
-  const editActivity = useLiveQuery(async () => {
+  // Editing is always based on today's config, so resolve it from Supabase.
+  const editActivity = useSupabaseQuery(async () => {
     if (!editOpen) return undefined
-    const identity = await db.activities.get(activity.id)
-    if (!identity) return undefined
-    const revisions = await db.activity_revisions.where("activity_id").equals(identity.id).toArray()
-    return resolveActivity(identity, revisions, todayLocal()) ?? identity
+    return getResolvedActivity(activity.id, todayLocal())
   }, [editOpen, activity.id])
   const openDialog = () => setDialogOpen(true)
   const missedLabel = missed ? "Undo" : "Missed it"

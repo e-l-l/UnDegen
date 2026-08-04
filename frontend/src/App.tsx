@@ -10,17 +10,17 @@ import { YouScreen } from "@/features/you/YouScreen"
 import { ActivitiesScreen } from "@/features/you/ActivitiesScreen"
 import { useSession } from "@/hooks/useSession"
 import { useReconcileNotifications } from "@/push/useReconcile"
-import { useSync } from "@/sync/useSync"
+import { useSupabaseRefresh } from "@/db/useSupabaseQuery"
 import PWABadge from "./PWABadge.tsx"
 
-// Signed-in subtree. Owns the sync-down hook here (not in App) so useSync is called
+// Signed-in subtree. Owns server-read refresh triggers here so the hook is called
 // unconditionally within a component that only mounts once a user is present —
 // keeping it above App's loading/signed-out early returns would break rules-of-hooks.
 // Routing lives here too (declarative react-router v7): unknown paths and "/" fall
 // through to /today. Screens render their own chrome (nav bars, rails), so there's
 // no shared layout route — Today's desktop chrome differs from Stats'.
 function SignedInApp({ userId }: { userId: string }) {
-  useSync(userId)
+  useSupabaseRefresh(userId)
   useReconcileNotifications(userId)
   return (
     <BrowserRouter>

@@ -3,8 +3,8 @@ import { useEffect } from "react"
 import { reconcileSubscription } from "./subscribe"
 
 // On session-active / reconnect / return-to-foreground, keep the push subscription
-// row and the user's timezone current — no permission prompt. Mirrors useSync's
-// trigger set; call it beside useSync in the signed-in subtree.
+// row and the user's timezone current — no permission prompt. Uses the same
+// session/reconnect/foreground trigger set as server-data refresh.
 export function useReconcileNotifications(userId: string): void {
   useEffect(() => {
     void reconcileSubscription(userId)

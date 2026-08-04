@@ -24,11 +24,11 @@ original `activities` columns.
   effective date is not after the calendar date being viewed.
 - Before the immutable original start, the activity has no occurrence. A future
   activity edit updates its initial revision; a started activity edit upserts a
-  revision effective today. Same-day cross-device saves use a compound-key upsert,
-  so the last synced save wins.
+  revision effective today. Same-day cross-device saves converge on the compound
+  key, so the last server write wins.
 - The original configuration columns stay on `activities` as a latest-value mirror.
-  New reads prefer revisions and fall back to the mirror when none exists; new
-  writes update both. A database trigger mirrors the last revision upsert too, so
+  New reads prefer revisions and fall back to the mirror when none exists. A
+  database trigger mirrors the last revision write, so
   cross-device request interleaving cannot leave old and new PWAs on different
   winning schedules. Removing the mirror is a later compatibility cleanup.
 - Names are not revised. Renaming intentionally relabels all history. Type and

@@ -2,7 +2,7 @@ import { supabase } from "@/utils/supabase"
 
 // The server-side alarm can't place a zoneless 'HH:MM' reminder without knowing the
 // user's timezone. We capture the device's IANA zone and write it to user_settings
-// direct (cloud-only, never through Dexie/syncQueue — see the push module note in
+// direct (cloud-only notification configuration — see the push module note in
 // frontend/CONTEXT.md). Last-device-wins: opening the app on a new device updates it.
 
 export function currentTimezone(): string {

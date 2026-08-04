@@ -1,8 +1,5 @@
-import type { Table } from "dexie"
-
-import { requestFlush } from "@/sync/syncEngine"
+import { supabase } from "@/utils/supabase"
 import { activityConfig, effectiveEditDate, resolveActivity } from "./activityRevisions"
-import { db } from "./db"
 import { recursOn } from "./recurrence"
 import type {
   Activity,
@@ -14,14 +11,13 @@ import type {
   DayActivity,
   DayActivitySource,
   NewActivityInput,
-  SyncOp,
   TableName,
   WorkSession,
 } from "./types"
+import { invalidateSupabaseData } from "./useSupabaseQuery"
 
-// The write half of the local-first layer: every mutation writes Dexie AND
-// enqueues its sync intent in a single transaction, so the local store and the
-// pending-sync list can never diverge. Reads still come straight from Dexie.
+// Supabase is the only persisted store. Every mutation waits for PostgREST and
+// invalidates mounted queries only after the server accepts the change.
 
 type RowFor = {
   activities: Activity
@@ -40,98 +36,93 @@ export function nowIso(): string {
   return new Date().toISOString()
 }
 
-// Apply the change locally + append a SyncQueueItem, atomically. Then nudge the
-// sync engine (no-ops if offline / already flushing).
-async function applyAndQueue<T extends TableName>(
-  table: T,
-  op: SyncOp,
-  rowId: string,
-  row?: RowFor[T]
-): Promise<void> {
-  await db.transaction("rw", db.table(table), db.syncQueue, async () => {
-    const t = db.table(table) as Table<RowFor[T], string>
-    if (op === "delete") {
-      await t.delete(rowId)
-    } else if (row) {
-      await t.put(row)
-    }
-    await db.syncQueue.add({
-      table,
-      op,
-      rowId,
-      payload: op === "delete" ? undefined : (row as unknown as Record<string, unknown>),
-      createdAt: nowIso(),
-      attempts: 0,
-    })
-  })
-  void requestFlush()
+function fail(error: { message: string } | null): void {
+  if (error) throw new Error(error.message)
 }
 
-// ── Generic write API ────────────────────────────────────────────────────────
-// Callers mint the id (newId()) so the same UUID is used locally and in Supabase.
-
-export function createRow<T extends TableName>(table: T, row: RowFor[T]): Promise<void> {
-  return applyAndQueue(table, "insert", (row as { id: string }).id, row)
+function isUniqueViolation(error: { code?: string } | null): boolean {
+  return error?.code === "23505"
 }
 
-export function updateRow<T extends TableName>(table: T, row: RowFor[T]): Promise<void> {
-  return applyAndQueue(table, "update", (row as { id: string }).id, row)
+async function createRow<T extends TableName>(table: T, row: RowFor[T]): Promise<RowFor[T]> {
+  const { data, error } = await supabase.from(table).insert(row).select("*").single()
+  fail(error)
+  return data as RowFor[T]
 }
 
-export function deleteRow<T extends TableName>(table: T, id: string): Promise<void> {
-  return applyAndQueue(table, "delete", id)
+async function updateRow<T extends TableName>(table: T, row: RowFor[T]): Promise<RowFor[T]> {
+  const { data, error } = await supabase
+    .from(table)
+    .update(row)
+    .eq("id", (row as { id: string }).id)
+    .select("*")
+    .maybeSingle()
+  fail(error)
+  if (!data) throw new Error(`${table} row no longer exists`)
+  return data as RowFor[T]
 }
 
-// ── Convenience builders for the rows that carry user_id + stamps ────────────
-// (day_activities / completions / work_sessions own no user_id — RLS resolves
-//  their ownership via join — so they go through the generic API with an id set
-//  by the caller, e.g. day-materialisation.)
+async function deleteRow(table: TableName, id: string): Promise<void> {
+  const { error } = await supabase.from(table).delete().eq("id", id)
+  fail(error)
+}
 
-export async function newActivity(
-  userId: string,
-  input: Omit<Activity, "id" | "user_id" | "created_at" | "updated_at">
-): Promise<Activity> {
+async function getActivity(activityId: string): Promise<Activity | undefined> {
+  const { data, error } = await supabase.from("activities").select("*").eq("id", activityId).maybeSingle()
+  fail(error)
+  return (data as Activity | null) ?? undefined
+}
+
+async function getActivityRevisions(activityId: string): Promise<ActivityRevision[]> {
+  const { data, error } = await supabase.from("activity_revisions").select("*").eq("activity_id", activityId)
+  fail(error)
+  return (data ?? []) as ActivityRevision[]
+}
+
+export async function nextActivityPosition(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("activities")
+    .select("position")
+    .eq("user_id", userId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  fail(error)
+  return data ? data.position + 1 : 0
+}
+
+export async function createActivity(userId: string, input: NewActivityInput): Promise<Activity> {
   const now = nowIso()
-  const row: Activity = {
+  const activity: Activity = {
     ...input,
     id: newId(),
     user_id: userId,
+    position: await nextActivityPosition(userId),
+    archived: false,
+    exception_dates: [],
     created_at: now,
     updated_at: now,
   }
-  await createRow("activities", row)
-  return row
-}
+  const created = await createRow("activities", activity)
+  const revision: ActivityRevision = {
+    id: newId(),
+    activity_id: created.id,
+    effective_from: created.recurrence_start,
+    ...activityConfig(created),
+    created_at: created.created_at,
+    updated_at: created.updated_at,
+  }
 
-// Next position for a new activity — append to the end of the user's list.
-// activities.position is already indexed (db.ts: "id, user_id, archived, position").
-export async function nextActivityPosition(userId: string): Promise<number> {
-  const activities = await db.activities.where("user_id").equals(userId).toArray()
-  return activities.length === 0 ? 0 : Math.max(...activities.map((a) => a.position)) + 1
-}
-
-// Convenience wrapper for the create-activity flow: stamps position (append to
-// end) and archived (false), then delegates to newActivity. Read-then-write
-// wrapped in one transaction so concurrent creates (multi-tab, offline-queue
-// racing an online write) can't read the same max position twice.
-export async function createActivity(
-  userId: string,
-  input: NewActivityInput
-): Promise<Activity> {
-  return db.transaction("rw", db.activities, db.activity_revisions, db.syncQueue, async () => {
-    const position = await nextActivityPosition(userId)
-    const activity = await newActivity(userId, { ...input, position, archived: false, exception_dates: [] })
-    const revision: ActivityRevision = {
-      id: newId(),
-      activity_id: activity.id,
-      effective_from: activity.recurrence_start,
-      ...activityConfig(activity),
-      created_at: activity.created_at,
-      updated_at: activity.updated_at,
-    }
+  try {
     await createRow("activity_revisions", revision)
-    return activity
-  })
+  } catch (error) {
+    // Keep the two-row create all-or-nothing from the caller's perspective.
+    await deleteRow("activities", created.id)
+    throw error
+  }
+
+  invalidateSupabaseData()
+  return created
 }
 
 export type EditActivityInput = { name: string; config: ActivityRevisionConfig }
@@ -141,64 +132,97 @@ export async function editActivity(
   input: EditActivityInput,
   today: string
 ): Promise<Activity> {
-  return db.transaction("rw", db.activities, db.activity_revisions, db.syncQueue, async () => {
-    const activity = await db.activities.get(activityId)
-    if (!activity || activity.archived) throw new Error("Activity not found")
-    const now = nowIso()
-    const effectiveFrom = effectiveEditDate(activity, today)
-    const revisions = await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
-    const existing = revisions.find((revision) => revision.effective_from === effectiveFrom)
+  const activity = await getActivity(activityId)
+  if (!activity || activity.archived) throw new Error("Activity not found")
 
-    // A legacy client can create an activity without a revision even after the
-    // migration. Before adding today's edit, preserve its old mirror as the
-    // initial historical revision so updating that mirror cannot rewrite history.
-    if (revisions.length === 0 && effectiveFrom > activity.recurrence_start) {
-      await createRow("activity_revisions", {
-        id: newId(),
-        activity_id: activity.id,
-        effective_from: activity.recurrence_start,
-        ...activityConfig(activity),
-        created_at: activity.created_at,
-        updated_at: activity.updated_at,
-      })
-    }
-    const revision: ActivityRevision = {
-      id: existing?.id ?? newId(),
+  const revisions = await getActivityRevisions(activity.id)
+  const effectiveFrom = effectiveEditDate(activity, today)
+  const existing = revisions.find((revision) => revision.effective_from === effectiveFrom)
+
+  // Preserve the old compatibility mirror as history for a legacy-created row.
+  if (revisions.length === 0 && effectiveFrom > activity.recurrence_start) {
+    const historical: ActivityRevision = {
+      id: newId(),
       activity_id: activity.id,
-      effective_from: effectiveFrom,
-      ...input.config,
-      created_at: existing?.created_at ?? now,
-      updated_at: now,
+      effective_from: activity.recurrence_start,
+      ...activityConfig(activity),
+      created_at: activity.created_at,
+      updated_at: activity.updated_at,
     }
-    const updated: Activity = {
-      ...activity,
-      ...input.config,
-      name: input.name.trim(),
-      updated_at: now,
+    const { error } = await supabase.from("activity_revisions").insert(historical)
+    if (error && !isUniqueViolation(error)) fail(error)
+  }
+
+  const name = input.name.trim()
+  const { error: nameError } = await supabase.from("activities").update({ name }).eq("id", activity.id)
+  fail(nameError)
+
+  const now = nowIso()
+  const revision: ActivityRevision = {
+    id: existing?.id ?? newId(),
+    activity_id: activity.id,
+    effective_from: effectiveFrom,
+    ...input.config,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  }
+
+  try {
+    if (existing) {
+      await updateRow("activity_revisions", revision)
+    } else {
+      const { error } = await supabase.from("activity_revisions").insert(revision)
+      if (isUniqueViolation(error)) {
+        const { error: retryError } = await supabase
+          .from("activity_revisions")
+          .update({ ...input.config, updated_at: now })
+          .eq("activity_id", activity.id)
+          .eq("effective_from", effectiveFrom)
+        fail(retryError)
+      } else {
+        fail(error)
+      }
     }
-    await updateRow("activities", updated)
-    await (existing ? updateRow : createRow)("activity_revisions", revision)
-    return updated
-  })
+  } catch (error) {
+    // Compensate the independent name write when the revision is rejected.
+    await supabase.from("activities").update({ name: activity.name }).eq("id", activity.id)
+    throw error
+  }
+
+  const updated = await getActivity(activity.id)
+  if (!updated) throw new Error("Activity no longer exists")
+  invalidateSupabaseData()
+  return updated
 }
 
-export async function newDay(
-  userId: string,
-  date: string,
-  note: string | null = null
-): Promise<Day> {
-  const row: Day = { id: newId(), user_id: userId, date, note, created_at: nowIso() }
-  await createRow("days", row)
-  return row
+async function newDay(userId: string, date: string, note: string | null = null): Promise<Day> {
+  return createRow("days", { id: newId(), user_id: userId, date, note, created_at: nowIso() })
 }
-
-// ── Lazy instantiation (calendar model — see ADR 0001) ───────────────────────
-// day / day_activity rows are born only when an instance gains state. All are
-// idempotent get-or-create, keyed on the schema's unique indexes.
 
 export async function ensureDay(userId: string, date: string): Promise<Day> {
-  const existing = await db.days.where("[user_id+date]").equals([userId, date]).first()
-  return existing ?? (await newDay(userId, date))
+  const { data, error } = await supabase
+    .from("days")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("date", date)
+    .maybeSingle()
+  fail(error)
+  if (data) return data as Day
+
+  try {
+    return await newDay(userId, date)
+  } catch (insertError) {
+    // Another tab/device may have won the unique (user_id,date) race.
+    const { data: raced, error: readError } = await supabase
+      .from("days")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("date", date)
+      .maybeSingle()
+    fail(readError)
+    if (raced) return raced as Day
+    throw insertError
+  }
 }
 
 export async function ensureDayActivity(
@@ -207,24 +231,34 @@ export async function ensureDayActivity(
   activityId: string
 ): Promise<DayActivity> {
   const day = await ensureDay(userId, date)
-  const existing = await db.day_activities
-    .where("[day_id+activity_id]")
-    .equals([day.id, activityId])
-    .first()
-  if (existing) return existing
-  // source falls out of the rule: recurring if it occurs on this date, else a manual add.
-  const activity = await db.activities.get(activityId)
-  const revisions = activity
-    ? await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
-    : []
+  const { data, error } = await supabase
+    .from("day_activities")
+    .select("*")
+    .eq("day_id", day.id)
+    .eq("activity_id", activityId)
+    .maybeSingle()
+  fail(error)
+  if (data) return data as DayActivity
+
+  const activity = await getActivity(activityId)
+  const revisions = activity ? await getActivityRevisions(activity.id) : []
   const source: DayActivitySource = activity && recursOn(activity, date, undefined, revisions) ? "recurring" : "manual"
   const row: DayActivity = { id: newId(), day_id: day.id, activity_id: activityId, source, position: 0 }
-  await createRow("day_activities", row)
-  return row
+  try {
+    return await createRow("day_activities", row)
+  } catch (insertError) {
+    const { data: raced, error: readError } = await supabase
+      .from("day_activities")
+      .select("*")
+      .eq("day_id", day.id)
+      .eq("activity_id", activityId)
+      .maybeSingle()
+    fail(readError)
+    if (raced) return raced as DayActivity
+    throw insertError
+  }
 }
 
-// Mark a reminder done/skipped for a date. One completion per day_activity, so
-// this upserts. ("missed" is derived, never written here — see ADR 0001.)
 export async function markReminder(
   userId: string,
   date: string,
@@ -233,7 +267,13 @@ export async function markReminder(
   note: string | null = null
 ): Promise<Completion> {
   const da = await ensureDayActivity(userId, date, activityId)
-  const existing = await db.completions.where("day_activity_id").equals(da.id).first()
+  const { data, error } = await supabase
+    .from("completions")
+    .select("*")
+    .eq("day_activity_id", da.id)
+    .maybeSingle()
+  fail(error)
+  const existing = (data as Completion | null) ?? undefined
   const row: Completion = {
     id: existing?.id ?? newId(),
     day_activity_id: da.id,
@@ -241,59 +281,91 @@ export async function markReminder(
     completed_at: status === "done" ? nowIso() : null,
     note,
   }
-  await (existing ? updateRow : createRow)("completions", row)
-  return row
+
+  let saved: Completion
+  try {
+    saved = existing ? await updateRow("completions", row) : await createRow("completions", row)
+  } catch (writeError) {
+    if (existing) throw writeError
+    const { data: raced, error: retryReadError } = await supabase
+      .from("completions")
+      .select("*")
+      .eq("day_activity_id", da.id)
+      .maybeSingle()
+    fail(retryReadError)
+    if (!raced) throw writeError
+    saved = await updateRow("completions", { ...row, id: raced.id })
+  }
+  invalidateSupabaseData()
+  return saved
 }
 
-// Locate an already-instantiated day_activity for (user, date, activity), or
-// undefined if this occurrence has no override row yet. The two-step walk
-// (day by [user_id+date], then day_activity by [day_id+activity_id]) is shared
-// by clearReminder and removeOccurrence.
 async function findDayActivity(
   userId: string,
   date: string,
   activityId: string
 ): Promise<DayActivity | undefined> {
-  const day = await db.days.where("[user_id+date]").equals([userId, date]).first()
+  const { data: day, error: dayError } = await supabase
+    .from("days")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("date", date)
+    .maybeSingle()
+  fail(dayError)
   if (!day) return undefined
-  return db.day_activities.where("[day_id+activity_id]").equals([day.id, activityId]).first()
+  const { data, error } = await supabase
+    .from("day_activities")
+    .select("*")
+    .eq("day_id", day.id)
+    .eq("activity_id", activityId)
+    .maybeSingle()
+  fail(error)
+  return (data as DayActivity | null) ?? undefined
 }
 
 async function findActiveWorkSession(userId: string, activityId: string): Promise<WorkSession | undefined> {
-  const sessions = await db.work_sessions.where("status").equals("in_progress").toArray()
-  for (const session of sessions) {
-    const da = await db.day_activities.get(session.day_activity_id)
-    if (!da || da.activity_id !== activityId) continue
-    const day = await db.days.get(da.day_id)
-    if (day?.user_id === userId) return session
-  }
+  const { data: sessions, error } = await supabase
+    .from("work_sessions")
+    .select("*")
+    .eq("status", "in_progress")
+  fail(error)
+  const rows = (sessions ?? []) as WorkSession[]
+  if (!rows.length) return undefined
+
+  const { data: dayActivities, error: daError } = await supabase
+    .from("day_activities")
+    .select("id,day_id,activity_id")
+    .in("id", rows.map((session) => session.day_activity_id))
+    .eq("activity_id", activityId)
+  fail(daError)
+  const matching = dayActivities ?? []
+  if (!matching.length) return undefined
+
+  const { data: days, error: dayError } = await supabase
+    .from("days")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", matching.map((da) => da.day_id))
+  fail(dayError)
+  const ownedDayIds = new Set((days ?? []).map((day) => day.id))
+  const matchingDaIds = new Set(matching.filter((da) => ownedDayIds.has(da.day_id)).map((da) => da.id))
+  return rows.find((session) => matchingDaIds.has(session.day_activity_id))
 }
 
-// Undo a reminder's completion for a date: delete its completion row so the
-// instance reverts to not-done (no "not_done" status exists — absence is the
-// state; "missed" stays derived, see ADR 0001). No-op if nothing's marked.
-// Leaves the day_activity in place (harmless empty override; dayView left-joins
-// it), rather than garbage-collecting an instance that may also hold sessions.
-export async function clearReminder(
-  userId: string,
-  date: string,
-  activityId: string
-): Promise<void> {
+export async function clearReminder(userId: string, date: string, activityId: string): Promise<void> {
   const da = await findDayActivity(userId, date, activityId)
   if (!da) return
-  const existing = await db.completions.where("day_activity_id").equals(da.id).first()
-  if (existing) await deleteRow("completions", existing.id)
+  const { error } = await supabase.from("completions").delete().eq("day_activity_id", da.id)
+  fail(error)
+  invalidateSupabaseData()
 }
 
-// Add an existing activity to a date it doesn't recur on (source becomes 'manual').
-export function addManual(userId: string, date: string, activityId: string): Promise<DayActivity> {
-  return ensureDayActivity(userId, date, activityId)
+export async function addManual(userId: string, date: string, activityId: string): Promise<DayActivity> {
+  const row = await ensureDayActivity(userId, date, activityId)
+  invalidateSupabaseData()
+  return row
 }
 
-// Start a work session for a long_task day_activity. Goal fields are snapshotted
-// from the activity at start time (goal snapshot rule — see CLAUDE.md), so later
-// edits to the activity don't mutate history. Caller must not call this while an
-// in_progress session already exists for today (would create a concurrent dupe).
 export async function startWorkSession(
   userId: string,
   date: string,
@@ -303,10 +375,8 @@ export async function startWorkSession(
   if (active) return active
 
   const da = await ensureDayActivity(userId, date, activityId)
-  const activity = await db.activities.get(activityId)
-  const revisions = activity
-    ? await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
-    : []
+  const activity = await getActivity(activityId)
+  const revisions = activity ? await getActivityRevisions(activity.id) : []
   const resolved = activity ? resolveActivity(activity, revisions, date) : undefined
   const row: WorkSession = {
     id: newId(),
@@ -316,13 +386,11 @@ export async function startWorkSession(
     started_at: nowIso(),
     status: "in_progress",
   }
-  await createRow("work_sessions", row)
-  return row
+  const saved = await createRow("work_sessions", row)
+  invalidateSupabaseData()
+  return saved
 }
 
-// End an in_progress work session. total_secs is a plain wall-clock diff (no
-// pause/resume in v0 — see CLAUDE.md); goal_met only applies in goal mode
-// (zen sessions are open-ended, so there's nothing to meet).
 export async function completeWorkSession(session: WorkSession): Promise<WorkSession> {
   const endedAt = nowIso()
   const totalSecs = Math.round((new Date(endedAt).getTime() - new Date(session.started_at).getTime()) / 1000)
@@ -330,75 +398,57 @@ export async function completeWorkSession(session: WorkSession): Promise<WorkSes
     session.mode === "goal" && session.goal_duration_mins != null
       ? totalSecs >= session.goal_duration_mins * 60
       : null
-  const row: WorkSession = {
+  const saved = await updateRow("work_sessions", {
     ...session,
     ended_at: endedAt,
     total_secs: totalSecs,
     status: "completed",
     goal_met: goalMet,
-  }
-  await updateRow("work_sessions", row)
-  return row
+  })
+  invalidateSupabaseData()
+  return saved
 }
 
-// ── Delete / removal ─────────────────────────────────────────────────────────
-
-// "Delete entire event": soft-archive the whole activity. recursOn filters
-// archived, so every occurrence (past + future) disappears from the day views,
-// while completions/work_sessions rows are kept for history/stats. Reversible
-// in data — there's no un-archive UI yet (see CLAUDE.md open questions).
 export async function archiveActivity(activityId: string): Promise<void> {
-  const activity = await db.activities.get(activityId)
+  const activity = await getActivity(activityId)
   if (!activity || activity.archived) return
   await updateRow("activities", { ...activity, archived: true, updated_at: nowIso() })
+  invalidateSupabaseData()
 }
 
-// "Delete this day only": remove a single occurrence from one date without
-// touching the rule. For a recurring occurrence the date is recorded in the
-// activity's exception_dates so recursOn stops deriving it. Any state already
-// instantiated for that date (the day_activity + its completion/sessions) is
-// hard-deleted too — this wipes that day's record AND stops dayView's seen-loop
-// from resurrecting the orphaned day_activity as a manual item. Dexie has no
-// cascade, so children are deleted explicitly (children first keeps the sync
-// drain FK-safe); Postgres ON DELETE CASCADE covers the server side. The whole
-// exception-append + cascade runs in one transaction (the per-write helpers'
-// own transactions nest into it) so a mid-sequence crash can't orphan rows.
 export async function removeOccurrence(
   userId: string,
   date: string,
   activityId: string
 ): Promise<void> {
-  await db.transaction(
-    "rw",
-    [db.activities, db.activity_revisions, db.days, db.day_activities, db.completions, db.work_sessions, db.syncQueue],
-    async () => {
-      const activity = await db.activities.get(activityId)
-      if (!activity) return
-      const da = await findDayActivity(userId, date, activityId)
+  const activity = await getActivity(activityId)
+  if (!activity) return
+  const [da, revisions] = await Promise.all([
+    findDayActivity(userId, date, activityId),
+    getActivityRevisions(activity.id),
+  ])
+  const shouldExcept = recursOn(activity, date, undefined, revisions) || da?.source === "recurring"
+  const didExcept = shouldExcept && !(activity.exception_dates ?? []).includes(date)
 
-      // 1. Suppress future derivation of this recurring occurrence. recursOn is
-      // false once the date is already excepted, so this can't append a duplicate.
-      // A state-bearing occurrence can have been removed from today's new rule
-      // by an edit but still be visible; its recurring source keeps deletion
-      // one-way if another same-day edit later adds the weekday back.
-      const revisions = await db.activity_revisions.where("activity_id").equals(activity.id).toArray()
-      const shouldExcept = recursOn(activity, date, undefined, revisions) || da?.source === "recurring"
-      if (shouldExcept && !(activity.exception_dates ?? []).includes(date)) {
-        await updateRow("activities", {
-          ...activity,
-          exception_dates: [...(activity.exception_dates ?? []), date],
-          updated_at: nowIso(),
-        })
-      }
+  if (didExcept) {
+    await updateRow("activities", {
+      ...activity,
+      exception_dates: [...(activity.exception_dates ?? []), date],
+      updated_at: nowIso(),
+    })
+  }
 
-      // 2. Delete any instantiated state for this date (children before parent).
-      if (!da) return
-
-      const completion = await db.completions.where("day_activity_id").equals(da.id).first()
-      if (completion) await deleteRow("completions", completion.id)
-      const sessions = await db.work_sessions.where("day_activity_id").equals(da.id).toArray()
-      for (const s of sessions) await deleteRow("work_sessions", s.id)
-      await deleteRow("day_activities", da.id)
+  try {
+    if (da) await deleteRow("day_activities", da.id) // Postgres cascades children.
+  } catch (error) {
+    if (didExcept) {
+      await supabase
+        .from("activities")
+        .update({ exception_dates: activity.exception_dates ?? [] })
+        .eq("id", activity.id)
     }
-  )
+    throw error
+  }
+
+  invalidateSupabaseData()
 }

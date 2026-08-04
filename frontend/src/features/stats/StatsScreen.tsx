@@ -14,9 +14,9 @@ import { WeekdayFlake } from "./WeekdayFlake"
 // shared visuals (heatmap, focus trend, flake map) → per-activity breakdown.
 // Mobile/desktop are duplicated blocks (lg:hidden / hidden lg:block), not one
 // responsive tree — the chromes genuinely differ (same house rule as
-// TodayScreen/NewActivityDialog). Reads live Dexie data via useStatsOverview.
+// TodayScreen/NewActivityDialog). Reads Supabase data via useStatsOverview.
 
-// Loading shell — keeps the chrome so nav stays put while Dexie resolves.
+// Loading shell — keeps the chrome so nav stays put while Supabase responds.
 function StatsLoading() {
   return (
     <>

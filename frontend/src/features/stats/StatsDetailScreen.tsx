@@ -16,7 +16,7 @@ import { useStatsDetail } from "./useStatsData"
 // log. The long-task variant is the designed one; the reminder variant follows
 // the described spec (adherence chart + completion log) so every breakdown row's
 // drill-down is functional. Mobile/desktop are duplicated blocks per house rule;
-// the long/reminder body branches on data (not breakpoint). Reads live Dexie data
+// the long/reminder body branches on data (not breakpoint). Reads Supabase data
 // via useStatsDetail.
 
 function deltaLabel(dir: DeltaDir, amount: string, suffix = ""): string {

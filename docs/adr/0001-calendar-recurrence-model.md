@@ -44,13 +44,12 @@ Adopt **model C**.
 ## Consequences
 
 **Positive**
-- Matches "derive on read"; no empty-row bloat; no scheduled batch-materialise trigger
-  (awkward in an offline PWA).
+- Matches "derive on read"; no empty-row bloat or scheduled batch-materialise trigger.
 - `activities` is the one source both the view (client) and the alarm (server) expand from.
 - Sparse `days`/`day_activities` stay honest — a row means real engagement.
 
 **Negative / accepted trade-offs**
-- The view expands rules on every read (trivial for a handful of activities; a local Dexie read).
+- The view expands rules on every read (trivial for a handful of activities; rows are fetched from Supabase).
 - Schedule edits are date-effective and do not rewrite earlier derived history. See
   ADR 0004. `recurrence_start` remains the immutable lower bound.
 - The `missed` enum value is unused by the client (reserved for a possible future server sweep).
@@ -60,4 +59,4 @@ Adopt **model C**.
 - **A (today-only):** past unopened days have no rows, so missed-detection still needs
   rule-replay anyway — C generalises this cleanly to any date.
 - **B (windowed pre-materialise):** creates empty future rows (the same derive-on-read
-  violation, pointed forward) and needs a reliable background trigger we don't have offline.
+  violation, pointed forward) and adds unnecessary lifecycle/background-trigger work.

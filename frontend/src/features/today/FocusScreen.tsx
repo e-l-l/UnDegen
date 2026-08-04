@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 import { Navigate } from "react-router"
 import { Plus } from "lucide-react"
 
@@ -8,6 +7,7 @@ import { getDayItems } from "@/db/dayView"
 import { formatMonthDay, parseLocalDate } from "@/db/recurrence"
 import { completeWorkSession, startWorkSession } from "@/db/repo"
 import type { WorkSession } from "@/db/types"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { DaySwitcher } from "./DaySwitcher"
 import { dayAccess } from "./dayAccess"
 import { LongTaskCard } from "./LongTaskCard"
@@ -48,7 +48,7 @@ export function FocusScreen({ userId }: FocusScreenProps) {
   const isDesktop = useIsDesktop()
   const { selectedDate, isToday, realToday } = useSelectedDay()
   const access = dayAccess(selectedDate, realToday)
-  const items = useLiveQuery(() => getDayItems(userId, selectedDate), [userId, selectedDate])
+  const items = useSupabaseQuery(() => getDayItems(userId, selectedDate), [userId, selectedDate])
   const [creatingActivity, setCreatingActivity] = useState(false)
 
   const startSession = (activityId: string) => {

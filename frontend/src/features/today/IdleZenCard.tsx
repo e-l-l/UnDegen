@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 import { Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -7,6 +6,7 @@ import { startOfWeekMonday, todayLocal } from "@/db/recurrence"
 import { sessionDaySlices } from "@/db/sessionSlices"
 import { getCompletedSessions } from "@/db/taskHistory"
 import type { Activity } from "@/db/types"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
 
@@ -31,7 +31,7 @@ interface IdleZenCardProps {
 // rollup. No percentage language anywhere, ever.
 export function IdleZenCard({ activity, onStart, menu }: IdleZenCardProps) {
   const Icon = iconForActivity(activity)
-  const sessions = useLiveQuery(() => getCompletedSessions(activity.id), [activity.id])
+  const sessions = useSupabaseQuery(() => getCompletedSessions(activity.id), [activity.id])
   const hasHistory = (sessions?.length ?? 0) > 0
   const recent = (sessions ?? []).slice(-6)
   const maxSecs = Math.max(1, ...recent.map((s) => s.total_secs ?? 0))

@@ -1,4 +1,4 @@
-import { db } from "./db"
+import { supabase } from "@/utils/supabase"
 import { groupActivityRevisions } from "./activityRevisions"
 import {
   mondayIndex,
@@ -10,7 +10,7 @@ import {
   weekdayOf,
 } from "./recurrence"
 import { sessionDaySlices } from "./sessionSlices"
-import type { Activity, ActivityRevision, Completion } from "./types"
+import type { Activity, ActivityRevision, Completion, Day, DayActivity, WorkSession } from "./types"
 import { deltaDir } from "@/features/stats/types"
 import type {
   ActivityStatRow,
@@ -21,8 +21,8 @@ import type {
   WeekStripCell,
 } from "@/features/stats/types"
 
-// Stats data layer — pure reads over Dexie, aggregated in memory. All reads come
-// from Dexie (never Supabase); nothing here writes. Produces the exact
+// Stats data layer — direct Supabase reads aggregated in memory. Nothing here
+// writes. Produces the exact
 // StatsOverview / StatsDetail shapes the Stats UI consumes. At this scale the
 // full-scan approach is fine (no timestamp indexes; see db/CONTEXT.md).
 //
@@ -119,15 +119,19 @@ interface SessionFact {
 }
 
 async function load(userId: string): Promise<Loaded> {
-  // These three reads are independent (day_activities is filtered by day_id in
-  // memory, not queried on it), so fetch them in one round-trip.
-  const [activities, allRevisions, allDays, allDayActs] = await Promise.all([
-    db.activities.where("user_id").equals(userId).toArray(),
-    db.activity_revisions.toArray(),
-    db.days.toArray(),
-    db.day_activities.toArray(),
+  const [activityResult, revisionResult, dayResult, dayActivityResult] = await Promise.all([
+    supabase.from("activities").select("*").eq("user_id", userId),
+    supabase.from("activity_revisions").select("*"),
+    supabase.from("days").select("*").eq("user_id", userId),
+    supabase.from("day_activities").select("*"),
   ])
-  const days = allDays.filter((d) => d.user_id === userId)
+  for (const result of [activityResult, revisionResult, dayResult, dayActivityResult]) {
+    if (result.error) throw new Error(result.error.message)
+  }
+  const activities = (activityResult.data ?? []) as Activity[]
+  const allRevisions = (revisionResult.data ?? []) as ActivityRevision[]
+  const days = (dayResult.data ?? []) as Day[]
+  const allDayActs = (dayActivityResult.data ?? []) as DayActivity[]
   const activityIds = new Set(activities.map((activity) => activity.id))
   const revisionsByActivity = groupActivityRevisions(
     allRevisions.filter((revision) => activityIds.has(revision.activity_id))
@@ -140,10 +144,16 @@ async function load(userId: string): Promise<Loaded> {
   const dateByDaId = new Map(dayActs.map((da) => [da.id, dateByDayId.get(da.day_id)!]))
   const activityByDaId = new Map(dayActs.map((da) => [da.id, da.activity_id]))
 
-  const [completions, sessions] = await Promise.all([
-    daIds.length ? db.completions.where("day_activity_id").anyOf(daIds).toArray() : Promise.resolve([]),
-    daIds.length ? db.work_sessions.where("day_activity_id").anyOf(daIds).toArray() : Promise.resolve([]),
-  ])
+  const [completionResult, sessionResult] = daIds.length
+    ? await Promise.all([
+        supabase.from("completions").select("*").in("day_activity_id", daIds),
+        supabase.from("work_sessions").select("*").in("day_activity_id", daIds),
+      ])
+    : [{ data: [], error: null }, { data: [], error: null }]
+  if (completionResult.error) throw new Error(completionResult.error.message)
+  if (sessionResult.error) throw new Error(sessionResult.error.message)
+  const completions = (completionResult.data ?? []) as Completion[]
+  const sessions = (sessionResult.data ?? []) as WorkSession[]
 
   const completionByKey = new Map<string, Completion>()
   const activitiesWithCompletion = new Set<string>()

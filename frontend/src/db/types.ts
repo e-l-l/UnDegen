@@ -1,7 +1,7 @@
 // Data model — mirrors supabase/migrations/0001_initial_schema.sql.
 // ids = uuid strings; dates/timestamps = ISO strings; `time` cols = 'HH:MM' strings.
-// Keeping everything as the JSON shape supabase-js returns means zero conversion
-// between Dexie (local) and Supabase (cloud).
+// These are the JSON shapes returned by supabase-js; no local persistence layer
+// or second representation exists.
 
 // ── Enums (match the Postgres enum types) ────────────────────────────────────
 export type ActivityType = 'reminder' | 'long_task'
@@ -123,10 +123,8 @@ export interface WorkSession {
   note?: string | null
 }
 
-// ── Cloud-only tables (Supabase only — NOT mirrored in Dexie) ────────────────
-// Written direct to Supabase, bypassing the syncQueue: they're server-facing,
-// only exist while online, and are never read from Dexie in the UI critical
-// path. Mirrors supabase/migrations/0003_notifications.sql. See the push module.
+// ── Notification tables ──────────────────────────────────────────────────────
+// Mirrors supabase/migrations/0003_notifications.sql. See the push module.
 
 export interface UserSettings {
   user_id: string
@@ -159,7 +157,6 @@ export interface NotificationLog {
   error?: string | null
 }
 
-// ── syncQueue (local-only) — pending writes to flush to Supabase ─────────────
 export type TableName =
   | 'activities'
   | 'activity_revisions'
@@ -167,16 +164,3 @@ export type TableName =
   | 'day_activities'
   | 'completions'
   | 'work_sessions'
-
-export type SyncOp = 'insert' | 'update' | 'delete'
-
-export interface SyncQueueItem {
-  id?: number // Dexie auto-increment (++id)
-  table: TableName
-  op: SyncOp
-  rowId: string // uuid of the affected row
-  payload?: Record<string, unknown> // row data for insert/update; omit for delete
-  createdAt: string
-  attempts: number
-  lastError?: string
-}

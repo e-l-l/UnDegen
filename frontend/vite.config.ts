@@ -10,6 +10,9 @@ export default defineConfig({
   // npm_package_version when running via the package scripts (dev/build/preview).
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
+    // With no precache manifest, the worker would otherwise be byte-identical
+    // across app-only deploys and could not surface the explicit update prompt.
+    __SW_BUILD_ID__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? new Date().toISOString()),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -34,12 +37,11 @@ export default defineConfig({
     },
 
     injectManifest: {
-      globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+      injectionPoint: undefined,
     },
 
     devOptions: {
       enabled: false,
-      navigateFallback: 'index.html',
       suppressWarnings: true,
       type: 'module',
     },

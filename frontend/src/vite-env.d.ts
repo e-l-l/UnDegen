@@ -15,3 +15,4 @@ interface ImportMeta {
 
 // Injected by Vite's `define` (see vite.config.ts) — the app version string.
 declare const __APP_VERSION__: string
+declare const __SW_BUILD_ID__: string

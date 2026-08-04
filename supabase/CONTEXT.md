@@ -71,13 +71,13 @@ Server-side reminders. Full rationale in **ADR 0003**; the shape:
   occurrence suppresses its send (the function left-joins `completions` over all due items).
   Soft stops its remaining nudges; strict is pre-empted before its single fire. `skipped` is
   written by the Today "Missed it" action (see root `CLAUDE.md`). Best-effort — reads Supabase,
-  so an offline/unsynced mark near fire-time may still let one through.
+  so a completion request that has not reached Supabase near fire-time may still let one through.
 - **Dead subscriptions self-clean**: a `410 Gone`/`404` from the push service deletes that
   `push_subscriptions` row.
 - **Same-day edit cutoff:** slots at or before a today-effective revision's server save minute are not replayed; later slots remain eligible.
 
-These three tables are **cloud-only**: written direct to Supabase by the client (never through
-Dexie/`syncQueue`) and read only by the function (service-role). Still RLS owner-only.
+These three tables are server-facing notification state: written directly to Supabase by the
+client and read by the function (service-role). They remain RLS owner-only.
 
 **Glossary** (shared with the frontend recurrence model):
 - **alarm** — the server-side trigger (this function + cron).
@@ -101,7 +101,7 @@ VAPID_PRIVATE_KEY=… VAPID_SUBJECT=mailto:… CRON_SECRET=…` (generate VAPID 
 - One numbered SQL file per change (`0001_`, `0002_`, …). Never edit a migration that has already been applied to a real environment — add a new one.
 - Wrap DDL in `begin`/`commit`.
 - **Adding an enum value** uses `alter type <enum> add value [if not exists] '<v>'` — keep it in its **own** migration and don't use the new value elsewhere in the same file: Postgres forbids using a value in the transaction that adds it (`0008` adds `reminder_type` = `'random'` and does nothing else).
-- Schema changes here **must** be mirrored in `frontend/src/db/types.ts` (interfaces) and, if indexes/uniqueness change, `frontend/src/db/db.ts`. Local Dexie and cloud Postgres are kept in lockstep.
+- Schema changes here **must** be mirrored in `frontend/src/db/types.ts` and in the affected direct query/mutation code. Supabase is the only persisted schema; there is no local database mirror.
 
 ## Not yet here (planned — see CLAUDE.md Open Questions)
 

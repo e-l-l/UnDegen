@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 import { ChevronLeft, ChevronRight, MoreVertical } from "lucide-react"
 import { useNavigate } from "react-router"
 
@@ -10,10 +9,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { groupActivityRevisions, resolveActivity } from "@/db/activityRevisions"
-import { db } from "@/db/db"
+import { getActiveActivities } from "@/db/activityQueries"
 import { todayLocal } from "@/db/recurrence"
 import type { Activity } from "@/db/types"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { activitySummary } from "@/features/activities/activitySummary"
 import { EditActivityDialog } from "@/features/activities/EditActivityDialog"
 import { DesktopIsland } from "@/features/today/DesktopIsland"
@@ -22,15 +21,7 @@ import { MobileTabBar } from "@/features/today/MobileTabBar"
 import { DeleteActivityDialog } from "./DeleteActivityDialog"
 
 async function loadActivities(userId: string): Promise<Activity[]> {
-  const activities = await db.activities.where("user_id").equals(userId).and((activity) => !activity.archived).sortBy("position")
-  const revisions = activities.length
-    ? await db.activity_revisions.where("activity_id").anyOf(activities.map((activity) => activity.id)).toArray()
-    : []
-  const byActivity = groupActivityRevisions(revisions)
-  const today = todayLocal()
-  return activities.map((activity) =>
-    resolveActivity(activity, byActivity.get(activity.id) ?? [], today < activity.recurrence_start ? activity.recurrence_start : today) ?? activity
-  )
+  return getActiveActivities(userId, todayLocal())
 }
 
 function ActivityList({
@@ -90,7 +81,7 @@ function ActivityList({
 
 export function ActivitiesScreen({ userId }: { userId: string }) {
   const navigate = useNavigate()
-  const activities = useLiveQuery(() => loadActivities(userId), [userId])
+  const activities = useSupabaseQuery(() => loadActivities(userId), [userId])
   const [editing, setEditing] = useState<Activity | null>(null)
   const [deleting, setDeleting] = useState<Activity | null>(null)
   const list = activities ?? []

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 
 import { getDayItems, type DayItem } from "@/db/dayView"
 import { addDays, formatMonthDay, parseLocalDate, todayLocal } from "@/db/recurrence"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 
 export interface ReminderBucket {
   item: DayItem
@@ -78,10 +78,9 @@ function timeLabelFor(activity: DayItem["activity"], anchor: number): string {
   return formatTimeLabel(anchor)
 }
 
-// The one Today read: a live Dexie query over getDayItems for the viewed `date`,
-// plus a minute-tick clock. Writes (markReminder, startWorkSession) go through
-// repo.ts and hit the same Dexie tables, so useLiveQuery re-runs this
-// automatically — no manual refresh wiring needed. The date comes from the
+// The one Today read: a Supabase query through getDayItems for the viewed `date`,
+// plus a minute-tick clock. Successful writes invalidate mounted server reads.
+// The date comes from the
 // SelectedDayProvider (day switcher); when it isn't real today the Earlier/Up-next
 // split is skipped in favour of the flat `reminders` list.
 export function useTodayData(userId: string, date: string): TodayData {
@@ -96,7 +95,7 @@ export function useTodayData(userId: string, date: string): TodayData {
     return () => clearInterval(id)
   }, [date])
 
-  const items = useLiveQuery(() => getDayItems(userId, date), [userId, date])
+  const items = useSupabaseQuery(() => getDayItems(userId, date), [userId, date])
 
   return useMemo(() => {
     const loading = items === undefined

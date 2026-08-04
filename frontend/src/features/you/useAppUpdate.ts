@@ -3,7 +3,7 @@ import { useRegisterSW } from "virtual:pwa-register/react"
 
 // Read-side companion to PWABadge for the You page's "App" section. PWABadge owns
 // the periodic update *detection* (hourly interval + visibilitychange/online,
-// guarded module-level) and the offline/update toast. This hook only needs the
+// guarded module-level) and the update toast. This hook only needs the
 // version string, whether a new build is waiting (needRefresh), an on-demand
 // "check now", and reload. It deliberately does NOT re-wire the periodic checks:
 // registering the SW twice is idempotent at the browser level, but duplicating the
@@ -24,7 +24,7 @@ export function useAppUpdate() {
   })
 
   const checkForUpdate = useCallback(async () => {
-    // r.update() over a dead network throws — same offline guard PWABadge uses.
+    // r.update() over a dead network throws; wait for connectivity instead.
     if ("onLine" in navigator && !navigator.onLine) return
     const r = regRef.current
     if (!r) return

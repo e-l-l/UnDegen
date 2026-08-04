@@ -6,9 +6,8 @@ import { vapidKeyBytes } from "./vapid"
 
 // Client side of Web Push: request permission, subscribe via the service worker's
 // PushManager, and persist the subscription + timezone DIRECT to Supabase (these
-// are cloud-only, acquired-while-online, never read from Dexie — a deliberate
-// exception to the offline-first write path). The Edge Function reads these rows
-// to know who + where to push.
+// live in Supabase alongside the rest of the app data. The Edge Function reads
+// these rows to know who + where to push.
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
 

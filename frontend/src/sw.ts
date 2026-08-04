@@ -1,32 +1,24 @@
 /// <reference lib="webworker" />
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
-import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { vapidKeyBytes } from './push/vapid'
 
 declare let self: ServiceWorkerGlobalScope
+
+self.addEventListener('install', () => {
+  // Makes the worker byte-distinct for every deploy even though it no longer
+  // carries a precache manifest, preserving the user-controlled update prompt.
+  console.info(`[sw] installed ${__SW_BUILD_ID__}`)
+})
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING')
     self.skipWaiting()
 })
 
-// self.__WB_MANIFEST is the default injection point
-precacheAndRoute(self.__WB_MANIFEST)
-
-// clean old assets
-cleanupOutdatedCaches()
-
-/** @type {RegExp[] | undefined} */
-let allowlist
-// in dev mode, we disable precaching to avoid caching issues
-if (import.meta.env.DEV)
-  allowlist = [/^\/$/]
-
-// to allow work offline
-registerRoute(new NavigationRoute(
-  createHandlerBoundToURL('index.html'),
-  { allowlist },
-))
+// This worker exists for Web Push and update prompting only. The app is
+// network-backed; remove caches left by the former offline-first worker.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.keys().then((names) => Promise.all(names.map((name) => caches.delete(name)))).then(() => undefined))
+})
 
 // ── Web Push ─────────────────────────────────────────────────────────────────
 // The send-notifications Edge Function posts { title, body, url, tag }. `tag`

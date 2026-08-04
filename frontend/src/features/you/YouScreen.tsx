@@ -1,10 +1,9 @@
-import { useLiveQuery } from "dexie-react-hooks"
 import { Bell, ChevronRight, ListChecks } from "lucide-react"
 import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { db } from "@/db/db"
+import { getActiveActivityCount } from "@/db/activityQueries"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { DesktopIsland } from "@/features/today/DesktopIsland"
 import { MobileTabBar } from "@/features/today/MobileTabBar"
 import { cn } from "@/lib/utils"
@@ -238,8 +237,8 @@ export function YouScreen({ userId }: { userId: string }) {
   const email = session?.user.email
   const name = session?.user.user_metadata?.name as string | undefined
 
-  const activityCount = useLiveQuery(
-    () => db.activities.where("user_id").equals(userId).and((a) => !a.archived).count(),
+  const activityCount = useSupabaseQuery(
+    () => getActiveActivityCount(userId),
     [userId]
   )
 
@@ -301,33 +300,6 @@ export function YouScreen({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* Confirm dialog — only surfaces when signing out would discard unsynced
-          offline writes (pendingCount !== null). */}
-      <Dialog open={signOut.pendingCount !== null} onOpenChange={(next) => !next && signOut.cancel()}>
-        <DialogContent className="top-1/2 left-1/2 w-[calc(100%-2.5rem)] max-w-[400px] -translate-x-1/2 -translate-y-1/2 gap-0 rounded-[20px] border border-[#303030] bg-[#1a1a1a] p-6 lg:p-[26px]">
-          <DialogTitle className="tracking-[-0.01em] lg:text-[19px]">Sign out?</DialogTitle>
-          <p className="mt-2.5 text-[14px] leading-[1.55] text-[#9A9A9A] lg:text-[14.5px]">
-            This signs you out and clears all Undegen data stored on this device. Anything not synced is gone.
-          </p>
-          <div className="mt-5.5 flex gap-2.5 lg:mt-6 lg:justify-end">
-            <button
-              type="button"
-              onClick={signOut.cancel}
-              className="flex-1 rounded-[12px] border border-[#303030] bg-transparent py-2.75 text-[14px] font-medium text-[#C4C4C4] transition-colors hover:border-[#3E3E3E] lg:flex-none lg:px-5 lg:py-2.5"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={signOut.busy}
-              onClick={() => void signOut.confirmSignOut()}
-              className="flex-1 rounded-[12px] border border-[#542E31] bg-[#3A2124] py-2.75 text-[14px] font-semibold text-[#F0DADA] transition-colors hover:bg-[#472629] disabled:pointer-events-none disabled:opacity-60 lg:flex-none lg:px-5 lg:py-2.5"
-            >
-              {signOut.busy ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

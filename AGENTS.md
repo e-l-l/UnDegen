@@ -41,7 +41,6 @@ Substantial nodes in the repo carry a local `CONTEXT.md` documenting that node's
 - **Tailwind CSS** — utility-first styling
 - **shadcn/ui** — component layer; use shadcn components for UI, don't hand-roll primitives
 - **Recharts** — charts and analytics graphs
-- **Dexie.js** — IndexedDB wrapper; local-first data layer, source of truth for all reads
 - **vite-plugin-pwa** — service worker, web manifest, asset generation (`injectManifest` strategy)
 - **@vite-pwa/assets-generator** — generates all icon sizes from a single source SVG
 
@@ -59,28 +58,25 @@ Substantial nodes in the repo carry a local `CONTEXT.md` documenting that node's
 
 ---
 
-## Architecture — Offline First
+## Architecture — Supabase as the Source of Truth
 
 ```
 User action
     ↓
-Write to Dexie (local, instant)
+Read/write through supabase-js (RLS-scoped)
     ↓
-Queue write (syncQueue)
-    ↓
-Online?  → flush to Supabase directly via supabase-js (RLS-scoped)
-Offline? → flush when connection returns (background sync via service worker)
+Supabase Postgres
 ```
 
-- **All reads come from Dexie.** Never read from the API in the critical path.
-- **Supabase Postgres is the cloud mirror**, not the source of truth.
-- Static assets are precached on first load — app opens fully offline.
+- **Supabase Postgres is the single persisted source of truth** for application data.
+- UI read functions query Supabase directly; writes complete on the server before the UI refetches.
+- There is no Dexie/IndexedDB mirror, sync queue, offline write path, or asset precache.
 
 ---
 
 ## PWA Configuration
 
-Implementation detail lives with the code — see `frontend/CONTEXT.md` (PWA section) for SW strategy, update cadence, offline prompt, and icon generation. Root-level constraint only: **never silently auto-update the SW** (write-heavy app; prompt instead).
+Implementation detail lives with the code — see `frontend/CONTEXT.md` (PWA section) for the Web Push worker, update cadence, and icon generation. Root-level constraint only: **never silently auto-update the SW** (a reload can interrupt an active timer; prompt instead).
 
 ---
 
@@ -101,7 +97,7 @@ activities ──→ activity_revisions
 Managed by Supabase Auth. No custom columns. Per-user app config lives in a **separate `user_settings` table** (keyed by `auth.users.id`) — currently the user's IANA `timezone` (load-bearing for server-side notification firing; see ADR 0003), plus reserved quiet-hours columns.
 
 ### notification tables (`user_settings`, `push_subscriptions`, `notification_log`)
-Cloud-only, added by migration `0003` for Web Push (ADR 0003). Not mirrored in Dexie — the client writes them **direct** to Supabase (see What Not To Do), and the Edge Function reads them via service-role. `notification_log` is the claim-then-send idempotency ledger, unique on `(activity_id, local_date, slot)`.
+Added by migration `0003` for Web Push (ADR 0003). The client writes `user_settings` and `push_subscriptions` to Supabase, and the Edge Function reads them via service-role. `notification_log` is the claim-then-send idempotency ledger, unique on `(activity_id, local_date, slot)`.
 
 ### `activities`
 Stable identity of a trackable thing. Two immutable types: `reminder` and `long_task`. Schedule/config columns remain as a legacy/latest mirror so older installed PWAs keep working; date-aware reads prefer `activity_revisions`.
@@ -139,25 +135,20 @@ Goal fields are snapshotted at session start — editing an activity later doesn
 
 Key columns: `id`, `day_activity_id`, `mode` (`goal`|`zen`), `goal_duration_mins`, `goal_unit`, `goal_target`, `goal_actual`, `started_at`, `ended_at`, `total_secs`, `status` (`in_progress`|`completed`|`abandoned`), `goal_met`, `note`
 
-### Dexie (local) schema
-Mirrors the six user-data Supabase tables (`activities`, `activity_revisions`, `days`, `day_activities`, `completions`, `work_sessions`), plus one local-only table: `syncQueue`.
-
----
-
 ## Key Decisions (settled — don't re-debate)
 
 | Decision | Choice | Reason |
 |---|---|---|
 | PWA vs native | PWA | No App Store, no $99/yr, Web Push solves notifications on iOS 16.4+ |
 | Backend service | None — Supabase-direct | `supabase-js` covers auth + CRUD with RLS; only Web Push needs a server, done via Edge Function + `pg_cron`. Dropped FastAPI (redundant, extra host + secret surface) |
-| Local DB | Dexie.js | Clean async/await API over raw IndexedDB, TypeScript support, schema versioning |
-| Data strategy | Local-first | Offline is a core feature; Supabase is cloud mirror only |
+| Local DB | None | No IndexedDB mirror or sync queue; avoid dual-source conflict semantics |
+| Data strategy | Supabase-first | Supabase Postgres is the single source of truth; UI reads and writes use `supabase-js` directly |
 | Config storage | Date-effective `activity_revisions`; legacy/latest mirror on `activities` | Schedule edits apply from a local date without rewriting history; the mirror keeps older installed PWAs compatible. ADR 0004 supersedes the single-row portion of the earlier choice |
 | `day_activities.type` | Removed | Inferrable from join; storing it creates drift risk |
 | Recurrence model | Calendar-style (derive, don't pre-store) | Occurrences expand the date-effective activity revision (legacy fallback); `day_activities` remain lazy override rows and `days` remain sparse. Alarms resolve the same revision server-side |
 | Deleting a task | Day → `exception_dates`; event → `archived` | "Delete this day only" appends the date to `activities.exception_dates` (both `recursOn`s skip it) and wipes that date's instantiated state; "delete entire event" flips `archived` (hides everywhere, keeps `completions`/`work_sessions` for history). Both one-way from the UI in v0. `repo.removeOccurrence` / `repo.archiveActivity` |
 | Ad-hoc tasks (v0) | Not supported | All `day_activities` have an `activity_id`; everything comes from a template |
-| Pause/resume (v0) | Not supported | Adds timer + sync + analytics complexity; `total_secs` is a simple diff for now |
+| Pause/resume (v0) | Not supported | Adds timer-state + analytics complexity; `total_secs` is a simple diff for now |
 | Goal snapshot | At session start | Immutable history even if activity config changes later |
 | Streak calculation | Derived on read | Computed from `completions`; not stored |
 | Missed detection | Derived on read, never written | No cron flip, no stored `missed` status; view computes it (`frontend/src/db/`: `recurrence.ts`, `dayView.ts`, `repo.ts`). ADR 0001 |
@@ -166,7 +157,7 @@ Mirrors the six user-data Supabase tables (`activities`, `activity_revisions`, `
 | Notification firing | Poll-and-compute, server-side | `pg_cron` (1/min) resolves `activity_revisions` for each user's local date (legacy fallback), then derives due slots. A same-day edit never replays slots at/before its server save minute; remaining slots may fire. Claim-then-send and done/skipped suppression are unchanged. ADRs 0003–0004 |
 | `random` reminder subtype | Single fire at a **seeded-random** minute in a window; time hidden | Third `reminder_type` (migration `0008`). Reuses `soft_start`/`soft_end` as the window (`soft_interval_mins` null) — no new columns, no CHECK change. Fire minute = `hash32(activity_id + local_date)` mapped into `[start,end]`, computed in `schedule.ts` `dueSlots` every tick — **deterministic per (activity, day)** so `notification_log` dedupes it exactly like strict; **never stored** (derive-on-read, ADR 0001). Unpredictable to the user *is the point* (surprise → can't pre-arrange avoidance): Today hides the time entirely — the row just reads "RANDOM", never the window or the minute (the range read as clutter); anchored at `soft_end` so a pending one stays in "up next". Push copy "Surprise. It's time." Must stay deterministic — a per-tick `Math.random()` would change the slot every minute and fire repeatedly |
 | Timezone | Per-user IANA in `user_settings` | Needed to place zoneless `strict_time`; last-device-wins; DST-safe via `AT TIME ZONE`. Not per-device/per-activity. ADR 0003 |
-| Notification writes | Direct to Supabase | `push_subscriptions`/`user_settings` bypass Dexie/`syncQueue` — cloud-only, online-only, never read from Dexie. The one write exception |
+| Notification writes | Direct to Supabase | `push_subscriptions`/`user_settings` are server-facing notification state, protected by owner RLS |
 | Activity icons | Frontend string map | No icon/emoji column in DB; icon derived from `type` + `name` on the FE |
 | Navigation / routing | react-router v7 (declarative `BrowserRouter`) | Routes `/today`, `/focus` (mobile-only), `/stats`, `/stats/:activityId`, `/you`, `/you/activities`, catch-all → `/today`. Nav entries remain Today/Focus/Stats/You on mobile and Today/Stats/You on desktop; the Activities manager is a You subpage. Screens own their chrome. SW notification-click → `/today`; `frontend/vercel.json` handles SPA deep links. |
 | Day switcher / viewed day | Past reminder corrections, real today ±7, shared context | Today **and** Focus step through days (chevrons only, no calendar/swipe) within real today ±7 to see that day's view. **Past reminders can be marked done or undone** so a forgotten completion can be corrected; future reminders remain review-only. Long tasks stay review-only off-today because starting a timer later would record the wrong wall-clock time. Skipping, starting/stopping sessions, and deleting remain today-only. The **viewed day** lives in `SelectedDayProvider` (context above the routes) so it persists across Today↔Focus; resets to today on cold start + notification tap (`sw.ts` posts `notification-click`). Off-today: flat reminder list (no NOW/Earlier/Up-next), relative title (Yesterday/Tomorrow/weekday) + neutral `X of Y done`, calm state labels, and read-only long-task cards showing that day's logged time / `Planned`. No schema change — the existing lazy `markReminder`/`clearReminder` write path already accepts a date, while `dayView.deriveState` resolves past→`missed`/future→`pending`. Plumbing lives in `frontend/src/features/today/`; UI spec in that folder's `DESIGN_HANDOFF_day_switcher.md` |
@@ -177,7 +168,7 @@ Mirrors the six user-data Supabase tables (`activities`, `activity_revisions`, `
 ## Open Questions (unresolved — flag before implementing)
 
 - **Un-archive / restore** — deleting a task is one-way from the UI. "Delete entire event" sets `archived`; "delete this day" appends to `exception_dates`. Nothing reverses either (no undo toast, no archived screen), so an archived activity or a removed day can't be brought back in-app yet. The **You → Activities** manager can archive active activities but cannot list or restore them; restoring needs an archived-management surface (declined for v0).
-- **Notification preferences UI** — the You screen now offers **reallow** (re-enable + live status) any time, closing the "no re-enable once granted/blocked" gap. Still open: an **off toggle**, global mute, quiet hours (`user_settings.quiet_hours_*` reserved-but-unread), and per-activity mute — none have a screen. Also, sign-out clears local Dexie but **not** the device's cloud `push_subscriptions` row (needs network, may be offline), so a signed-out device can still receive a push until it re-subscribes — revisit with the full prefs screen.
+- **Notification preferences UI** — the You screen now offers **reallow** (re-enable + live status) any time, closing the "no re-enable once granted/blocked" gap. Still open: an **off toggle**, global mute, quiet hours (`user_settings.quiet_hours_*` reserved-but-unread), and per-activity mute — none have a screen. Sign-out does **not** remove the device's `push_subscriptions` row, so a signed-out device can still receive a push until it re-subscribes — revisit with the full prefs screen.
 
 *(Resolved: **push_subscriptions** — landed in migration `0003` alongside `user_settings` + `notification_log`; Web Push is built. See ADR 0003. **Recurrence exceptions** — single-occurrence removal landed via `activities.exception_dates` (migration `0007`), honored by both `recursOn`s; see `repo.removeOccurrence`.)*
 
@@ -185,8 +176,8 @@ Mirrors the six user-data Supabase tables (`activities`, `activity_revisions`, `
 
 ## What Not To Do
 
-- Don't read from the API in the UI critical path — always read from Dexie
-- Don't route cloud-only notification state (`push_subscriptions`, `user_settings`) through Dexie/`syncQueue` — write it direct to Supabase (the one documented write exception; see ADR 0003)
+- Don't add a local database, IndexedDB mirror, sync queue, or offline write path — Supabase is the single source of truth
+- Keep application data access in `frontend/src/db/`; UI hooks should consume that layer rather than inventing another cache/persistence path
 - Don't store derived values (streaks, completion rates) — compute on read
 - Don't add a `type` column to `day_activities` — it's inferrable and creates drift
 - Don't add arbitrary type-extension tables; date-effective activity config belongs in the settled `activity_revisions` table and its legacy mirror

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react"
-import { useLiveQuery } from "dexie-react-hooks"
 import { Play } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { getCompletedSessions } from "@/db/taskHistory"
 import type { Activity } from "@/db/types"
+import { useSupabaseQuery } from "@/db/useSupabaseQuery"
 import { formatDuration } from "@/lib/utils"
 import { iconForActivity } from "./iconForActivity"
 
@@ -20,7 +20,7 @@ interface IdleGoalCardProps {
 // low end of the bar rather than a separate empty state.
 export function IdleGoalCard({ activity, onStart, menu }: IdleGoalCardProps) {
   const Icon = iconForActivity(activity)
-  const sessions = useLiveQuery(() => getCompletedSessions(activity.id), [activity.id])
+  const sessions = useSupabaseQuery(() => getCompletedSessions(activity.id), [activity.id])
   const bankedSecs = (sessions ?? []).reduce((sum, s) => sum + (s.total_secs ?? 0), 0)
   const goalSecs = (activity.goal_duration_mins ?? 0) * 60
   const pct = goalSecs > 0 ? Math.min(1, bankedSecs / goalSecs) : 0

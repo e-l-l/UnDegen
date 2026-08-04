@@ -7,7 +7,6 @@ function PWABadge() {
   const period = 60 * 60 * 1000
 
   const {
-    offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
@@ -27,11 +26,10 @@ function PWABadge() {
   })
 
   function close() {
-    setOfflineReady(false)
     setNeedRefresh(false)
   }
 
-  if (!offlineReady && !needRefresh)
+  if (!needRefresh)
     return null
 
   // Bottom-anchored, on-system toast (grayscale + dark tokens; pink stays reserved
@@ -45,18 +43,14 @@ function PWABadge() {
     >
       <div className="flex items-center gap-3 rounded-xl border border-border bg-popover/95 px-4 py-3 shadow-lg backdrop-blur-sm">
         <p id="pwa-toast-message" className="flex-1 text-sm text-foreground">
-          {offlineReady
-            ? 'Ready to work offline.'
-            : 'New version available.'}
+          New version available.
         </p>
         <div className="flex items-center gap-1">
-          {needRefresh && (
-            <Button variant="outline" size="sm" onClick={() => updateServiceWorker(true)}>
-              Reload
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={() => updateServiceWorker(true)}>
+            Reload
+          </Button>
           <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => close()}>
-            {needRefresh ? 'Later' : 'Dismiss'}
+            Later
           </Button>
         </div>
       </div>

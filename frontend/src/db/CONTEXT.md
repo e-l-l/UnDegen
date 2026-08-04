@@ -1,54 +1,95 @@
 # CONTEXT — `frontend/src/db/`
 
-The local-first data layer. This is the **source of truth for all reads** in the app. Root context in `/CLAUDE.md`; app-level context in `frontend/CONTEXT.md`.
+The Supabase-backed application data layer. Supabase Postgres is the single
+persisted source of truth; there is no Dexie/IndexedDB mirror, local sync queue,
+or offline write path. Root context lives in `/CLAUDE.md`; app-level context is
+in `frontend/CONTEXT.md`.
 
-```
-frontend/src/
-└── db/   ← YOU ARE HERE — Dexie (IndexedDB) store + the TS data model
-```
+## Files
 
-## Contents
+- `types.ts` — TypeScript interfaces matching the Supabase tables and enums.
+- `repo.ts` — mutation API. All user-data writes go directly through
+  `supabase-js`, wait for PostgREST success, then invalidate mounted reads.
+- `useSupabaseQuery.ts` — the small React query/invalidation bridge. It returns
+  `undefined` for the initial load, keeps the last successful value during a
+  refresh, and refetches after mutations, reconnect, or app foreground.
+- `activityRevisions.ts` — pure date-effective configuration selection.
+- `activityQueries.ts` — small activity list/count/date-resolved server reads.
+- `recurrence.ts` — pure recurrence/date helpers.
+- `dayView.ts` — direct Supabase read API for a calendar day; expands recurrence
+  and joins sparse occurrence state in memory.
+- `taskHistory.ts` — direct Supabase read for a long task's completed sessions.
+- `stats.ts` — direct Supabase reads plus in-memory Stats aggregation.
+- `sessionSlices.ts` — pure cross-midnight session splitting.
 
-- `db.ts` — the Dexie database instance (`UndegenDB`), schema version, and index definitions. Version 2 adds/backfills `activity_revisions`.
-- `types.ts` — TypeScript interfaces for the six user-data tables + the local-only `syncQueue`, plus the Postgres enum types as string unions.
-- `activityRevisions.ts` — pure date selection/resolution helpers. Reads prefer the latest revision effective on the viewed date, fall back to legacy columns, and yield no occurrence before the immutable original start.
-- `recurrence.ts` — pure recurrence/time helpers (`todayLocal`, `parseLocalDate`, `weekdayOf`, `recursOn` (produces an occurrence only when the activity isn't archived, the date is on/after `recurrence_start`, its weekday matches, **and** the date isn't in the activity's `exception_dates` — single-occurrence removal), plus the 'HH:MM' local wall-clock helpers `nowTimeLocal`/`nextHourLocal`/`defaultStartTimeLocal`/`hourAfterLocal` — used to default and floor same-day reminder/soft-window times so they can't be set in the past), shared by `dayView.ts`, `repo.ts`, and the create-activity form.
-- `dayView.ts` — the **read API** for a date. `getDayItems(userId, date)` expands due `activities` for that date, left-joins whatever `day_activities`/`completions`/`work_sessions` are already instantiated, and returns `DayItem[]` (with a derived `state` and owner `date`) sorted by `activity.position`. When the requested date is real today, still-running prior-day long-task sessions float into the result so they remain finishable after midnight while staying attached to their start date. This is the calendar model described below, built and in use — see "Mirror discipline"/"Not built yet" for what's still outstanding around it.
-- `sessionSlices.ts` — shared pure helper for splitting a completed `work_session` across local calendar-day boundaries. Used anywhere a UI/stat says "today" or "this week" for long-task time, so cross-midnight sessions credit the minutes actually done on each day instead of only the `started_at` day.
-- `taskHistory.ts` — the **read API** across dates for a single `long_task` activity. `getCompletedSessions(activityId)` walks every `day_activity` the activity has ever materialised (via the `day_activities.activity_id` index) and returns its `completed` `work_sessions`, oldest→newest. `dayView.ts` deliberately stays date-scoped; this is the one place that reads a `long_task`'s full history (banked goal progress, session-length sparkline, weekly rollups — all in `frontend/src/features/today/IdleGoalCard.tsx`/`IdleZenCard.tsx`).
-- `stats.ts` — the **read API** for the Stats surface (`getStatsOverview(userId)` / `getStatsDetail(userId, activityId)`). Cross-activity, cross-date aggregation: loads the user's whole row set once (full scan — no timestamp indexes; fine at this scale), indexes occurrence state by `activity_id|date`, then derives the Mon–Sun calendar-week windows (showed-up ÷ planned, focus banked, deltas, most-avoided; the current week is partial → counts elapsed days only via a `date > today` guard), the 8-week trend/adherence series, the all-time weekday×hour heatmap buckets, the weekday flake, and per-activity rows/detail. Long-task amount/showed-up buckets split completed sessions across local calendar days, so a cross-midnight session credits the minutes actually done on each day; session logs/sparklines remain whole-session records. Pure reads; produces the `features/stats` DTO shapes. **Archived rule:** amount stats include archived; rate stats are active-only (uses `recursOn`, which already excludes archived). Consumed via `features/stats/useStatsData.ts` (`useLiveQuery`).
-- `repo.ts` — the **write API**. `createActivity` creates identity + initial revision atomically; `editActivity` renames, upserts today’s (or the future initial) revision, updates the legacy/latest mirror, and queues both writes. The existing lazy occurrence, completion/session, archive, and single-date removal APIs remain here.
+## Core contract
 
-## The core contract (do not break)
+1. **Supabase is authoritative.** Read functions query PostgREST directly. A
+   query may hold response data in React component state while mounted, but
+   nothing is persisted locally and there is no second writable source.
+2. **Writes go through `repo.ts`.** Mutations wait for the server. On success,
+   `invalidateSupabaseData()` makes mounted queries refetch. Do not add optimistic
+   local persistence or a retry queue.
+3. **RLS is part of every access path.** Direct-owner tables are also filtered by
+   `user_id` where available; join-owned tables rely on their existing RLS
+   policies. Every Supabase error must be checked and surfaced.
+4. **No stored derived values.** Streaks, missed state, completion rates, and
+   analytics remain computed on read.
+5. **The service worker is not a data layer.** It exists for Web Push/update
+   prompting and does not cache application assets or queue requests.
 
-1. **All reads come from Dexie. Never from Supabase in the UI critical path.** Supabase is the cloud mirror, not the read source. (Sync-*down* does read Supabase — but into Dexie, in the background, never the render path; see #4.)
-2. **Write path (push):** go through `repo.ts` — it writes Dexie and queues in one transaction. Revision inserts/updates use a compound-key upsert; other updates retain **`.update().eq`** delete-terminal behavior. Drain remains ordered and single-flight.
-3. **No stored derived values** (streaks, completion rates). Compute on read.
-4. **Read-down path (pull):** `src/sync/pull.ts` `pullAll()` re-reads the user's full row set from Supabase (RLS-scoped) and reconciles into Dexie — **server wins, except rows with a pending `syncQueue` entry** (unflushed local writes are never overwritten or deleted, so an offline create isn't eaten). Full-set, not incremental (most tables lack an `updated_at`/tombstone). **Invariant: a delete is terminal** — reconcile drops local rows absent server-side, and flush's `.update()` (see #2) means no concurrent edit brings a deleted row back. Accepted limit: two devices editing the *same* row offline → last flush wins (no field-level merge without `updated_at`). Triggers (from `useSync`): session active, `online`, app-foreground. See ADR 0002.
+## Data shape and identity
 
-## Things that are non-obvious and load-bearing
+- Domain IDs are app-generated UUIDs (`crypto.randomUUID()`). Postgres defaults
+  also support UUIDs, but callers build related rows before sending them.
+- Objects use the JSON shape returned by `supabase-js`: dates/timestamps are ISO
+  strings, Postgres `time` values are strings, and `recurrence_days` uses JS
+  `Date.getDay()` (0=Sun..6=Sat).
+- `day_activities` has no `type`; resolve it through its `activity`.
+- Type-specific schedule/config lives in `activity_revisions`. The nullable
+  mirror columns on `activities` remain for compatibility with older clients.
+- `WorkSession` goal fields are snapshots taken at session start.
 
-- **IDs are app-generated UUIDs** (`crypto.randomUUID()`), not auto-increment. Same UUID is used locally and in Supabase → rows are 1:1 across both stores, so sync needs no id mapping. The **only** auto-increment is `syncQueue.id` (`++id`).
-- **Dexie table property names equal the Supabase table names** (`activities`, `activity_revisions`, `days`, `day_activities`, `completions`, `work_sessions`). The sync flush resolves them generically from `SyncQueueItem.table`; don't rename one side without the other.
-- **Stored objects mirror the JSON shape `supabase-js` returns** — dates/timestamps are ISO strings, `time` columns are `'HH:MM'` strings, `recurrence_days` is `number[]` using JS `Date.getDay()` (0=Sun..6=Sat). Keeping the shapes identical means **zero conversion** between Dexie and Supabase. Preserve this; don't introduce a separate local representation.
-- **The `stores()` string lists indexed fields only** — the full object is still stored regardless. `&` = unique index, `[a+b]` = compound index. Current indexes encode real constraints: `&[user_id+date]` on `days` (one row per date per user), `&[day_id+activity_id]` on `day_activities` (an activity appears at most once per day), `&day_activity_id` on `completions` (one completion per day_activity).
-- **`day_activities` has no `type` field** — inferred via join to `Activity`. Do not add one (drift risk; see CLAUDE.md).
-- **Type-specific config is date-effective in `ActivityRevision`**. The same nullable columns remain on `Activity` only as a legacy/latest compatibility mirror.
-- **`WorkSession` goal fields are snapshots** taken at session start. Editing an `Activity` later must not mutate existing sessions.
+## Calendar model
 
-## Built — the calendar model
+`getDayItems(userId, date)` expands non-archived recurring activities whose
+date-effective revision applies, then left-joins the sparse `days` →
+`day_activities` → completion/session state fetched from Supabase. A
+`day_activity` is created lazily only when an occurrence gets state. On real
+today, a still-running long-task session from an earlier owner date is surfaced
+so it can be stopped after midnight without moving its history.
 
-- **Day view = derived, not materialised** (CLAUDE.md → Recurrence model). `dayView.ts`'s `getDayItems(userId, date)` **expands** non-archived `activities` where `recurrence_start ≤ date`, `recurrence_days` includes `date`'s weekday (`getDay()`), and `date` isn't in `exception_dates`, then left-joins the existing `day_activities`/`completions`/`work_sessions` for that date to get per-item state. Each `DayItem.date` is the owner date for its materialised occurrence. For real today only, still-running long-task sessions from earlier dates are merged into the result (replacing today's derived idle occurrence for the same activity if needed) so cross-midnight sessions stay visible and finishable without moving/splitting the stored session. Order by `activities.position`. First real consumer: `frontend/src/features/today/` (`useTodayData.ts` wraps it in `useLiveQuery`).
-- **Lazy instantiation**: a `day_activities` row (+ its parent `days` row) is created **only** when an instance gains state — completing a reminder (`completion` done/skipped), starting a work session, or manually adding an activity to a date it doesn't recur on (`source:'manual'`). "Skip" = `completion.status='skipped'`. **"Missed" is derived, never written by the client** (due-by-rule on a past date with no completion-bearing row). Built via `repo.ts`: `ensureDay` + `ensureDayActivity` (idempotent via `&[day_id+activity_id]`) then the `completion`/`work_session` (`markReminder`, `startWorkSession`, `completeWorkSession`). `completeWorkSession(session)` takes the full row (caller already has it from `getDayItems`), stamps `ended_at`/`total_secs` (plain wall-clock diff — no pause/resume in v0) and `status:'completed'`, and sets `goal_met` only in `goal` mode (`zen` sessions are open-ended, nothing to meet). This is a manual "stop" action wired from the Today screen, not a Focus-session timer — there's still no countdown/auto-complete UI anywhere.
+Reminder `missed` remains derived from an absent completion on a past due date;
+the client never writes it. The Today “Missed it” action writes `skipped`.
 
-## Not built yet (expect to add here / nearby)
+`repo.ensureDay` and `repo.ensureDayActivity` handle unique-key races by reading
+the row another tab/device created. Completion creation similarly retries as an
+update if another writer won the one-per-occurrence race. Postgres cascade
+deletes completion/session children when an occurrence is removed.
 
-- Sync flush (push) is **built** (`src/sync/syncEngine.ts`); sync-down (pull) is **built** (`src/sync/pull.ts` + `src/sync/useSync.ts`, ADR 0002). Still to add: SW background-sync trigger from `src/sw.ts`, and poison-item handling (currently a permanently-failing item blocks the queue — and, because the pull flushes first, also stalls fresh pulls behind it).
-- **Streak calculation** — still a UI-side stub (`useTodayData.ts` returns a hardcoded `0`). Deriving it for real (consecutive days of what, exactly — every due reminder done? at least one?) is unresolved; do it here when it's built, per the "derived on read, not stored" rule.
-- **Abandoned sessions** — `completeWorkSession` only ever writes `status:'completed'`. Nothing sets `status:'abandoned'` (e.g. closing the tab mid-session) — an `in_progress` session just sits there until the user comes back and taps Stop. No cleanup/timeout job exists.
-- Activity edits are date-effective (ADR 0004): earlier dates retain earlier plans; the effective date is evaluated wholly under the new revision, including in Stats.
-- Schema migrations: bump `db.version(n)` and add an `.upgrade()` when the shape changes; never edit `version(1)` in place once data exists in the wild.
+## Stats
 
-## Mirror discipline
+`stats.ts` loads the user's RLS-scoped row sets from Supabase, indexes them in
+memory, and produces the `features/stats` DTOs. The existing rules remain:
+amount stats include archived history; rate stats are active-only; completed
+cross-midnight sessions are split across local calendar days for amount/showed-up
+buckets, while logs and sparklines retain whole sessions.
 
-`types.ts` and `db.ts` mirror the Supabase migrations through `0009_activity_revisions.sql`; schema changes must stay in lockstep. `ActivityRevision` mirrors the date-effective table and Dexie version 2's compound unique index. `Activity.exception_dates` remains activity-wide. `ReminderType` includes `random`; its seeded minute is derived, never stored. The legacy configuration fields on `Activity` intentionally remain until older installed PWAs can be retired.
+## Known limits
+
+- Multi-call mutations such as activity identity + initial revision use a
+  compensating delete on failure, because PostgREST calls are separate
+  transactions. If stronger all-or-nothing semantics become necessary, move the
+  operation into a narrowly scoped Postgres function rather than adding a local
+  transaction layer.
+- `useSupabaseQuery` refreshes on successful local mutations and when the app
+  returns to the foreground/reconnects. It does not subscribe to Realtime.
+- Streak calculation is still a UI-side stub (`useTodayData.ts` returns `0`).
+- `in_progress` sessions have no timeout/abandon sweep.
+
+## Schema discipline
+
+`types.ts` mirrors the Supabase migrations through
+`0009_activity_revisions.sql`. Schema changes must update migrations, these
+types, and the affected query/mutation code together. There is no local schema
+version to bump.
